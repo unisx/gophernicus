@@ -28,6 +28,7 @@ Command line options:
     -nd           Disable date and filesize in menus
     -nc           Disable file content detection
     -no           Disable charset conversion for output
+    -nq           Disable HTTP-style query strings (?query)
     -ns           Disable logging to syslog
 
     -d            Debug to syslog (not for production use)

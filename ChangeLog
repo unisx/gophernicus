@@ -1,3 +1,13 @@
+2010-07-03  Kim Holviala  <kim@holviala.com>
+
+	* Released version 0.9
+	* Added option to disable HTTP-style query strings
+	* Fixed a regression where some binary files were served out
+	  as text (which broke them)
+	* BinHex files are now mapped to filetype 4
+	* Disabling vhosting disables sessions (mostly)
+
+
 2010-04-30  Kim Holviala  <kim@holviala.com>
 
 	* Released version 0.8

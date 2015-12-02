@@ -261,6 +261,7 @@ typedef struct {
 	char opt_magic;
 	char opt_iconv;
 	char opt_vhost;
+	char opt_query;
 	char debug;
 } state;
 
@@ -310,7 +311,8 @@ typedef struct {
 	"txt","0","pl","0","py","0","sh","0","tcl","0","c","0","cpp","0", "h","0","log","0", \
 	"conf","0","php","0","php3","0", \
 	"map","1","menu","1", \
-	"Z","5","gz","5","tgz","5","tar","5","zip","5","bz2","5","rar","5", \
+	"hqx","4", \
+	"Z","5","gz","5","tgz","5","tar","5","zip","5","bz2","5","rar","5","sea","5", \
 	"q","7","qry","7", \
 	"iso","9","so","9","o","9","rtf","9","xls","9","doc","9","ppt","9", \
 	"xlsx","9","docx","9","pptx","9","ttf","9","bin","9", \

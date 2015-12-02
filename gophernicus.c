@@ -317,6 +317,7 @@ void init_state(state *st)
         st->opt_syslog = TRUE;
         st->opt_magic = TRUE;
         st->opt_iconv = TRUE;
+	st->opt_query = TRUE;
         st->debug = FALSE;
 
 	/* Load default suffix -> filetype mappings */
@@ -404,6 +405,7 @@ void parse_args(state *st, int argc, char *argv[])
 				if (*optarg == 'd') { st->opt_date = FALSE; break; }
 				if (*optarg == 'c') { st->opt_magic = FALSE; break; }
 				if (*optarg == 'o') { st->opt_iconv = FALSE; break; }
+				if (*optarg == 'q') { st->opt_query = FALSE; break; }
 				if (*optarg == 's') { st->opt_syslog = FALSE; break; }
 				break;
 
@@ -568,7 +570,7 @@ int main(int argc, char *argv[])
 		while (*c == '/' && *(c + 1) == '/') c++;
 
 		/* Start of a query string (either type 7 or HTTP-style)? */
-		if (*c == '\t' || *c == '?') {
+		if (*c == '\t' || (st.opt_query && *c == '?')) {
 			sstrlcpy(st.req_query_string, c + 1);
 			if ((c = strchr(st.req_query_string, '\t'))) *c = '\0';
 			break;
@@ -609,6 +611,9 @@ int main(int argc, char *argv[])
 
 	/* If stat said it was a dir then it's a menu */
 	if ((file.st_mode & S_IFMT) == S_IFDIR) st.req_filetype = TYPE_MENU;
+
+        /* Not a dir - let's guess the filetype again... */
+        else st.req_filetype = gopher_filetype(&st, st.req_realpath);
 
 	/* Menu selectors must end with a slash */
 	if (st.req_filetype == TYPE_MENU && strlast(st.req_selector) != '/')

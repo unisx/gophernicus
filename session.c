@@ -63,8 +63,10 @@ void get_shm_session(state *st, shm_state *shm)
 	if ((i = get_shm_session_id(st, shm)) == ERROR) return;
 
 	/* Get session data */
-	sstrlcpy(st->server_host, shm->session[i].server_host);
-	st->server_port = shm->session[i].server_port;
+	if (st->opt_vhost) {
+		sstrlcpy(st->server_host, shm->session[i].server_host);
+		st->server_port = shm->session[i].server_port;
+	}
 }
 #endif
 
