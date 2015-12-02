@@ -202,6 +202,7 @@ void selector_to_path(state *st)
 				return;
 			}
 		}
+		closedir(dp);
 	}
 
 	/* Handle normal selectors */

@@ -46,27 +46,17 @@
 #define HAVE_LOCALES		/* setlocale() and friends */
 #define HAVE_SHMEM		/* Shared memory support */
 #define HAVE_UNAME		/* uname() */
-#define HAVE_DIRENT_D_TYPE	/* d_type in struct dirent */
 #undef  HAVE_STRLCPY		/* strlcpy() from OpenBSD */
 #undef  HAVE_SENDFILE		/* sendfile() in Linux & others */
-#undef  HAVE_BROKEN_SCANDIR	/* Broken scandir() definition */
 
 /* Linux */
 #ifdef __linux
 #undef PASSWD_MIN_UID
 #define PASSWD_MIN_UID 500
 #define HAVE_SENDFILE
-#include <features.h>
-#if ! __GLIBC_PREREQ(2,8)
-#define HAVE_BROKEN_SCANDIR
-#endif
 #endif
 
-/* AIX */
-#ifdef _AIX
-#undef HAVE_DIRENT_D_TYPE
-#endif
-
+/* Add other OS-specific defines here */
 
 /*
  * Include headers
@@ -184,9 +174,9 @@
 #define ERR_EXE		"Couldn't execute file!"
 
 /* String formats */
-#define SERVER_SOFTWARE	"Gophernicus/" VERSION " Server (%s)"
+#define SERVER_SOFTWARE	"Gophernicus/" VERSION " (Server; %s)"
 #define HEADER_FORMAT	"[%s]"
-#define FOOTER_FORMAT	"Gophered by " SERVER_SOFTWARE
+#define FOOTER_FORMAT	"Gophered by Gophernicus/" VERSION " on %s"
 
 #define UNITS		"KB", "MB", "GB", "TB", "PB", NULL
 #define DATE_FORMAT	"%Y-%b-%d %H:%M"	/* See man 3 strftime */
@@ -214,6 +204,7 @@
 #define MAX_HIDDEN	32	/* Maximum number of hidden files */
 #define MAX_FILETYPES	128	/* Maximum number of suffix to filetype mappings */
 #define MAX_FILTERS	16	/* Maximum number of file filters */
+#define MAX_SDIRENT	1024	/* Maximum number of files per directory to handle */
 
 /* Struct for file suffix -> gopher filetype mapping */
 typedef struct {
@@ -305,6 +296,17 @@ typedef struct {
 
 #endif
 
+/* Struct for directory sorting */
+typedef struct {
+	char	name[128];	/* Should be 256 but we're saving stack space */
+	mode_t	mode;
+	uid_t	uid;
+	gid_t	gid;
+	off_t	size;
+	time_t	mtime;
+} sdirent;
+
+
 /* File suffix to gopher filetype mappings */
 #define FILETYPES \
 	"txt","0","pl","0","py","0","sh","0","tcl","0","c","0","cpp","0", "h","0","log","0", \
@@ -322,7 +324,7 @@ typedef struct {
 	"mbox","M", \
 	"pdf","p","ps","p", \
 	"mp3","s","wav","s","mid","s","wma","s","flac","s","ogg","s","aiff","s","aac","s", \
-	"avi","v","mp4","v","mpg","v","mov","v","qt","v","asf","v","mpv","v", \
+	"avi",";","mp4",";","mpg",";","mov",";","qt",";","asf",";","mpv",";", \
 	NULL, NULL
 
 /*

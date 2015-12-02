@@ -1,5 +1,18 @@
-2010-04-xx  Kim Holviala  <kim@holviala.com>
+2010-04-13  Kim Holviala  <kim@holviala.com>
 
+	* Released version 0.7
+	* This release is feature complete, no new features in sight
+	* Support for NetBSD (a typo prevented building - duh)
+	* Replaced the poorly-working scandir() with opendir/qsort
+	* Directory listings (menus) are limited to 1024 entries
+	* Changed the filetype of movies from "v" to ";" (which sucks)
+	* Fixed a compatibility issue with bucktooth gophermaps
+	* Finally wrote decent documentation (README and INSTALL)
+
+
+2010-04-11  Kim Holviala  <kim@holviala.com>
+
+	* Released version 0.6
 	* platform() results are kept in shared memory
 	* Support for AIX 5.1 and newer
 	* IPv4-in-IPv6 prefix ::ffff: is removed from remote_addr

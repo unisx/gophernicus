@@ -1,7 +1,7 @@
 NAME    = gophernicus
 PACKAGE = $(NAME)-server
 BINARY  = in.$(NAME)
-VERSION = 0.6
+VERSION = 0.7
 
 SOURCES = $(NAME).c file.c menu.c string.c platform.c session.c
 HEADERS = functions.h files.h
@@ -44,19 +44,20 @@ bin2c: bin2c.c
 	$(CC) $< -o $@
 
 files.h: bin2c
-	./bin2c README > $@
+	sed -n -e "1,/^ $$/p" README > README.options
+	./bin2c README.options README > $@
 	./bin2c LICENSE >> $@
 	./bin2c error.gif ERROR_GIF >> $@
 
 
 clean:
-	rm -f $(BINARY) $(OBJECTS) $(TGZ) $(HEADERS) bin2c
+	rm -f $(BINARY) $(OBJECTS) $(TGZ) $(HEADERS) README.options bin2c
 
 
 install: $(BINARY)
 	mkdir -p $(SBINDIR) $(DOCDIR)
-	$(INSTALL) -s -m 755 $(BINARY) $(SBINDIR)
-	$(INSTALL) -m 644 $(DOCS) $(DOCDIR)
+	PATH=$$PATH:/usr/sbin $(INSTALL) -s -m 755 $(BINARY) $(SBINDIR)
+	PATH=$$PATH:/usr/sbin $(INSTALL) -m 644 $(DOCS) $(DOCDIR)
 
 uninstall:
 	rm -f $(SBINDIR)/$(BINARY)

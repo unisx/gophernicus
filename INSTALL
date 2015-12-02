@@ -1,3 +1,5 @@
+Compiling and installing Gophernicus Server
+===========================================
 
 Gophernicus requires a C compiler but no extra libraries aside from
 standard LIBC ones. Care has been taken to use only standard POSIX
@@ -19,12 +21,35 @@ The -h <hostname> parameter is mandatory for a properly working
 Gophernicus Server. Other parameters can also be added, see the
 full list by running "/usr/sbin/in.gophernicus -?"
 
-By default Gophernicus servers gopher documents from /var/gopher
+By default Gophernicus serves gopher documents from /var/gopher
 although that can be changed by using the -r <root> parameter.
 To enable virtual hosting create hostname directories under
 the gopher root and make sure you have at least the primary
 hostname (the one set with -h <hostname>) directory available
 (mkdir /var/gopher/$HOSTNAME).
+
+
+Shared memory issues
+====================
+
+Gophernicus uses SYSV shared memory for session tracking and
+statistics. It creates the shared memory block using mode 600
+and a predefined key which means that a shared memory block
+created with one user cannot be used by another user. Simply
+said, running in.gophernicus as yourself will allocate that
+memory, and then running the binary through inetd as another
+user (nobody) will be denied access to that memory.
+
+If that happens you can simply delete the memory block and
+let Gophernicus recreate it - no harm done.
+
+$ su -
+# ipcs -m | grep beeb
+# ipcs -M <KEY FROM THE ABOVE COMMAND>
+
+
+Porting to different platforms
+==============================
 
 If you need to port Gophernicus to a new platform, please take
 a look at gophernicus.h which has a bunch of HAVE_* #defines.
@@ -35,11 +60,12 @@ include them into the next release.
 
 Tested and semi-supported platforms include:
 
-   OS 		Arch		Compiler
-  ========================================
-   AIX 5.1	POWER3		gcc 4.0.0
-   AIX 6.1      POWER4          gcc 4.2.0
-   Linux 2.6	x86_64		gcc 4.1.3
-   Linux 2.6	armv5tel	gcc 4.3.2
+  OS            Arch          Compiler
+ +-------------+-------------+-------------+
+  AIX 5.1       POWER3        gcc 4.0.0
+  AIX 6.1       POWER4        gcc 4.2.0
+  Linux 2.6     x86_64        gcc 4.1.3
+  Linux 2.6     armv5tel      gcc 4.3.2
+  NetBSD 5.0    amd64         gcc 4.1.3
 
 

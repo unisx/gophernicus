@@ -17,7 +17,14 @@ intepreted as gopher resource lines which the client will render as
 links. The first line of a gophermap should be a !Title line
 describing the menu.
 
-The format of a resource line is simple:
+Dynamic gophermaps are possible by making the gophermap a script
+and marking it as executable. All normal output is supressed, none
+of the below instructions apply but you'll have full programmable 
+control over the menu. Just remember that you can't get back from
+an executable gophermap - there will be no output after your
+script exits.
+
+The format of a gophermap resource line is simple:
 Xname<TAB>selector<TAB>host<TAB>port
 
 Where:
@@ -26,9 +33,10 @@ Where:
    selector   is the path to resource
    host:port  are the hostname and port number to go to
 
-Type and selector are mandatory, if you don't specify host or port
-the host:port of the current server are used instead. Also make sure
-to use ONLY ONE TAB between the fields.
+Type and name are mandatory. If you don't specify a selector, the
+name field will be also used as the selector. If you don't specify
+host or port the host:port of the current server are used instead.
+Also make sure to use ONLY ONE TAB between the fields.
 
 Valid filetypes include:
    0   text file
@@ -40,9 +48,10 @@ Valid filetypes include:
    g   GIF image
    h   HTML file
    i   info text
-   I   other image file
-   p   PDF file
+   I   generic image file (other than GIF)
+   p   PDF/PS file
    s   sound file
+   ;   video file
 
 Additional type characters supported by Gophernicus:
    #   comment - rest of the line is ignored
@@ -51,13 +60,14 @@ Additional type characters supported by Gophernicus:
    :   change filetypes for this directory (use ext=type in name)
    ~   include a list of users who have ~/public_gopher
    %   include a list of available virtual hosts
-   *   stop processing gophermap, include resource listing
+   *   stop processing gophermap, include normal file listing
    .   stop processing gophermap
 
 Examples of valid resource lines:
 
-1Absolute internal link	/
+1subdir/	
 1Relative internal link	subdir/
+1Absolute internal link	/
 1External link 	/	gopher.floodgap.com	70
 hLink to a website	URL:http://www.google.com/
 
@@ -71,11 +81,15 @@ hLink to a local html page	/path/to/file.html
 -hiddenfile.txt
 -hiddendir
 
-# Change filetypes locally for this directory
+# Change filetypes for this directory
 :png=g
+:foo=b
 
 Include links to users own gopherspaces:
 ~
+
+List all available virtual hosts:
+%
 
 Here we stop processing the gophermap and include the regular menu:
 *

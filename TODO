@@ -1,12 +1,11 @@
 Things I should work on:
 
-	* README need work...
 	* Automated feature testing script (perl?)
-	* Replace scandir/foldersort with opendir/qsort
 
 
 Things I might work on:
 
 	* Logparser (real-time?)
 	* SSL/TLS
+	* Standalone pre-forked (threaded?) version
 

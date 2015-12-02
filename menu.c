@@ -27,19 +27,63 @@
 
 
 /*
- * Callback for sorting directories folders first
+ * Alphabetic folders first sort for sortdir()
  */
-#ifdef HAVE_DIRENT_D_TYPE
-int foldersort(const struct dirent **a, const struct dirent **b)
+int foldersort(const void *a, const void *b)
 {
-	/* Sort directories first */
-	if ((*a)->d_type == DT_DIR && (*b)->d_type != DT_DIR) return -1;
-	if ((*a)->d_type != DT_DIR && (*b)->d_type == DT_DIR) return 1;
+	mode_t amode;
+	mode_t bmode;
 
-	/* Alphabetic sort for the rest */
-	return strcmp((*a)->d_name, (*b)->d_name);
+	amode = (*(sdirent *) a).mode & S_IFMT;
+	bmode = (*(sdirent *) b).mode & S_IFMT;
+
+	if (amode == S_IFDIR && bmode != S_IFDIR) return -1;
+	if (amode != S_IFDIR && bmode == S_IFDIR) return 1;
+
+	return strcmp((*(sdirent *) a).name, (*(sdirent *) b).name);
 }
-#endif
+
+
+/*
+ * Scan, stat and sort a directory folders first (scandir replacement)
+ */
+int sortdir(char *path, sdirent *list, int max)
+{
+	DIR *dp;
+	struct dirent *d;
+	struct stat s;
+	char buf[BUFSIZE];
+	int i;
+
+	/* Try to open the dir */
+	if ((dp = opendir(path)) == NULL) return 0;
+	i = 0;
+
+	/* Loop through the directory & stat() everything */
+	while (max--) {
+		if ((d = readdir(dp)) == NULL) break;
+
+		snprintf(buf, sizeof(buf), "%s/%s", path, d->d_name);
+		if (stat(buf, &s) == ERROR) continue;
+
+		if (strlen(d->d_name) > sizeof(list[i].name)) continue;
+		sstrlcpy(list[i].name, d->d_name);
+
+		list[i].mode  = s.st_mode;
+		list[i].uid   = s.st_uid;
+		list[i].gid   = s.st_gid;
+		list[i].size  = s.st_size;
+		list[i].mtime = s.st_mtime;
+		i++;
+	}
+	closedir(dp);
+
+	/* Sort the entries */
+	if (i > 0) qsort(list, i, sizeof(sdirent), foldersort);
+
+	/* Return number of entries found */
+	return i;
+}
 
 
 /*
@@ -98,8 +142,7 @@ void userlist(state *st)
  */
 void vhostlist(state *st)
 {
-	struct dirent **dir;
-	struct stat file;
+	sdirent dir[MAX_SDIRENT];
 	struct tm *ltime;
 	char timestr[20];
 	char buf[BUFSIZE];
@@ -108,7 +151,7 @@ void vhostlist(state *st)
 	int i;
 
 	/* Scan the root dir for vhost dirs */
-	num = scandir(st->server_root, &dir, NULL, alphasort);
+	num = sortdir(st->server_root, dir, MAX_SDIRENT);
 	if (num < 0) die(st, ERR_NOTFOUND);
 
 	/* Width of filenames for fancy listing */
@@ -117,41 +160,31 @@ void vhostlist(state *st)
 	/* Loop through the directory entries */
 	for (i = 0; i < num; i++) {
 
-		/* Get full path+name */
-		snprintf(buf, sizeof(buf), "%s/%s", st->server_root, dir[i]->d_name);
-
 		/* Skip dotfiles */
-		if (dir[i]->d_name[0] == '.') goto next;
+		if (dir[i].name[0] == '.') continue;
 
-		/* Skip non-world readable vhosts */
-		if (stat(buf, &file) == ERROR) goto next;
-		if ((file.st_mode & S_IROTH) == 0) goto next;
-
-		/* We're only interested in directories */
-		if ((file.st_mode & S_IFMT) != S_IFDIR) goto next;
+		/* We only want world-readable directories */
+		if ((dir[i].mode & S_IROTH) == 0) continue;
+		if ((dir[i].mode & S_IFMT) != S_IFDIR) continue;
 
 		/* Generate display string for vhost */
-		snprintf(buf, sizeof(buf), VHOST_FORMAT, dir[i]->d_name);
+		snprintf(buf, sizeof(buf), VHOST_FORMAT, dir[i].name);
 
 		/* Fancy listing */
 		if (st->opt_date) {
-			ltime = localtime(&file.st_mtime);
+			ltime = localtime(&dir[i].mtime);
 			strftime(timestr, sizeof(timestr), DATE_FORMAT, ltime);
 
 			printf("1%-*.*s   %s        -  \t/;%s\t%s\t%i" CRLF,
-				width, width, buf, timestr, dir[i]->d_name, 
-				dir[i]->d_name, st->server_port);
+				width, width, buf, timestr, dir[i].name, 
+				dir[i].name, st->server_port);
 		}
 
 		/* Teh boring version */
 		else {
 			printf("1%.*s\t/;%s\t%s\t%i" CRLF, st->out_width, buf,
-				dir[i]->d_name, dir[i]->d_name, st->server_port);
+				dir[i].name, dir[i].name, st->server_port);
 		}
-
-		/* Free allocated directory entry */
-		next:
-		free(dir[i]);
 	}
 }
 
@@ -274,6 +307,7 @@ int gophermap(state *st, char *file)
 			*c = '\0';
 			selector = c + 1;
 		}
+		if (!*selector) selector = name;
 
 		/* Parse host */
 		host = st->server_host;
@@ -313,9 +347,9 @@ int gophermap(state *st, char *file)
  */
 void gopher_menu(state *st)
 {
-	struct dirent **dir;
-	struct stat file;
+	sdirent dir[MAX_SDIRENT];
 	struct tm *ltime;
+	struct stat file;
 	char buf[BUFSIZE];
 	char pathname[BUFSIZE];
 	char displayname[BUFSIZE];
@@ -369,13 +403,7 @@ void gopher_menu(state *st)
 #endif
 
 	/* Scan the directory */
-#ifdef HAVE_BROKEN_SCANDIR
-	num = scandir(st->req_realpath, &dir, NULL, (int (*)(const void *, const void *)) foldersort);
-#elif HAVE_DIRENT_D_TYPE
-	num = scandir(st->req_realpath, &dir, NULL, foldersort);
-#else
-	num = scandir(st->req_realpath, &dir, NULL, alphasort);
-#endif
+	num = sortdir(st->req_realpath, dir, MAX_SDIRENT);
 	if (num < 0) die(st, ERR_NOTFOUND);
 
 	/* Create link to parent directory */
@@ -404,40 +432,38 @@ void gopher_menu(state *st)
 
 		/* Get full path+name */
 		snprintf(pathname, sizeof(pathname), "%s/%s",
-			st->req_realpath, dir[i]->d_name);
+			st->req_realpath, dir[i].name);
 
-		/* Skip dotfiles and gophermaps */
-		if (dir[i]->d_name[0] == '.') goto next;
-		if (strcmp(dir[i]->d_name, st->map_file) == MATCH) goto next;
+		/* Skip dotfiles, non world-readables and gophermaps */
+		if (dir[i].name[0] == '.') continue;
+		if ((dir[i].mode & S_IROTH) == 0) continue;
+		if (strcmp(dir[i].name, st->map_file) == MATCH) continue;
 
 		/* Skip files marked for hiding */
 		for (n = 0; n < st->hidden_count; n++)
-			if (strcmp(dir[i]->d_name, st->hidden[n]) == MATCH) goto next;
+			if (strcmp(dir[i].name, st->hidden[n]) == MATCH) break;
+		if (n < st->hidden_count) continue;	/* Cruel hack... */
 
 		/* Convert filename to 7bit ASCII & encoded versions */
 		if (st->opt_iconv)
-			strniconv(st->out_charset, displayname, dir[i]->d_name, sizeof(displayname));
+			strniconv(st->out_charset, displayname, dir[i].name, sizeof(displayname));
 		else
-			sstrlcpy(displayname, dir[i]->d_name);
+			sstrlcpy(displayname, dir[i].name);
 
-		strnencode(encodedname, dir[i]->d_name, sizeof(encodedname));
-
-		/* Skip non-world readable files */
-		if (stat(pathname, &file) == ERROR) goto next;
-		if ((file.st_mode & S_IROTH) == 0) goto next;
+		strnencode(encodedname, dir[i].name, sizeof(encodedname));
 
 		/* Handle inline .gophermap */
 		if (strstr(displayname, st->map_file) > displayname) {
 			gophermap(st, pathname);
-			goto next;
+			continue;
 		}
 
 		/* Handle directories */
-		if ((file.st_mode & S_IFMT) == S_IFDIR) {
+		if ((dir[i].mode & S_IFMT) == S_IFDIR) {
 
 			/* Dir listing with dates */
 			if (st->opt_date) {
-				ltime = localtime(&file.st_mtime);
+				ltime = localtime(&dir[i].mtime);
 				strftime(timestr, sizeof(timestr), DATE_FORMAT, ltime);
 
 				/* Hack to get around UTF-8 byte != char */
@@ -457,7 +483,7 @@ void gopher_menu(state *st)
 					st->server_host, st->server_port);
 			}
 
-			goto next;
+			continue;
 		}
 
 		/* Get file type */
@@ -465,9 +491,9 @@ void gopher_menu(state *st)
 
 		/* File listing with dates & sizes */
 		if (st->opt_date) {
-			ltime = localtime(&file.st_mtime);
+			ltime = localtime(&dir[i].mtime);
 			strftime(timestr, sizeof(timestr), DATE_FORMAT, ltime);
-			strfsize(sizestr, file.st_size, sizeof(sizestr));
+			strfsize(sizestr, dir[i].size, sizeof(sizestr));
 
 			/* Hack to get around UTF-8 byte != char */
 			n = width - strcut(displayname, width);
@@ -485,12 +511,7 @@ void gopher_menu(state *st)
 				displayname, st->req_selector, encodedname,
 				st->server_host, st->server_port);
 		}
-
-		/* Free allocated directory entry */
-		next:
-		free(dir[i]);
 	}
-	free(dir);
 
 	/* Print footer */
 	footer(st);
