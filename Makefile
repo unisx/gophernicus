@@ -8,7 +8,7 @@
 NAME    = gophernicus
 PACKAGE = $(NAME)
 BINARY  = in.$(NAME)
-VERSION = 1.4
+VERSION = 1.5
 
 SOURCES = $(NAME).c file.c menu.c string.c platform.c session.c options.c
 HEADERS = functions.h files.h
@@ -33,7 +33,7 @@ NET_SRV = /boot/common/settings/network/services
 
 DIST    = $(PACKAGE)-$(VERSION)
 TGZ     = $(DIST).tar.gz
-RELDIR  = /var/gopher/gophernicus.org/software/gophernicus/server/
+RELDIR  = /var/gopher/gophernicus.org/software/gophernicus/
 
 CC      = gcc
 HOSTCC	= $(CC)
@@ -57,8 +57,17 @@ generic: $(BINARY)
 #
 # Special targets
 #
-deb:
+deb: ChangeLog
 	dpkg-buildpackage -rfakeroot -uc -us
+
+ChangeLog:
+	if [ -d .git ]; then \
+		(./git2changelog > .ChangeLog; \
+		sed -ne '/2012-12-02/,$$p' ChangeLog >> .ChangeLog; \
+		mv .ChangeLog ChangeLog); \
+	else true; fi
+
+.PHONY: ChangeLog
 
 
 #
@@ -100,7 +109,7 @@ files.h: bin2c
 clean: clean-build clean-deb
 
 clean-build:
-	rm -f $(BINARY) $(OBJECTS) $(TGZ) $(HEADERS) README.options bin2c
+	rm -f $(BINARY) $(OBJECTS) $(TGZ) $(HEADERS) README.options bin2c .ChangeLog
 
 clean-deb:
 	if [ -d debian/$(PACKAGE) ]; then fakeroot debian/rules clean; fi
@@ -109,7 +118,7 @@ clean-deb:
 #
 # Install targets
 #
-install:
+install: ChangeLog
 	@case `uname` in \
 		Darwin)  $(MAKE) ROOT="$(OSXROOT)" install-files install-docs install-root install-osx install-done; ;; \
 		Haiku)   $(MAKE) SBINDIR=/boot/common/bin DOCDIR=/boot/common/share/doc/$(PACKAGE) \
@@ -230,9 +239,9 @@ uninstall-launchd:
 #
 # Release targets
 #
-dist: clean functions.h
+dist: clean functions.h ChangeLog
 	mkdir -p /tmp/$(DIST)
-	tar -cf - ./ | (cd /tmp/$(DIST) && tar -xf -)
+	tar -cf - ./ --exclude=./.git | (cd /tmp/$(DIST) && tar -xf -)
 	(cd /tmp/ && tar -cvf - $(DIST)) | gzip > $(TGZ)
 	rm -rf /tmp/$(DIST)
 
@@ -245,4 +254,12 @@ release: dist
 #
 defines:
 	$(CC) -dM -E $(NAME).c
+
+
+#
+# LOC
+#
+loc:
+	@wc -l *.c
+
 

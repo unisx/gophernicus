@@ -25,7 +25,7 @@ int gophermap(state *st, char *mapfile, int depth);
 void gopher_menu(state *st);
 void strrepeat(char *dest, char c, size_t num);
 void strreplace(char *str, char from, char to);
-int strcut(char *str, size_t width);
+size_t strcut(char *str, size_t width);
 char *strkey(char *header, char *key);
 char strlast(char *str);
 void chomp(char *str);
