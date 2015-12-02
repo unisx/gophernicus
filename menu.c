@@ -163,6 +163,9 @@ void vhostlist(state *st)
 		/* Skip dotfiles */
 		if (dir[i].name[0] == '.') continue;
 
+		/* Require FQDN */
+		if (!strchr(dir[i].name, '.')) continue;
+
 		/* We only want world-readable directories */
 		if ((dir[i].mode & S_IROTH) == 0) continue;
 		if ((dir[i].mode & S_IFMT) != S_IFDIR) continue;
@@ -219,9 +222,37 @@ char gopher_filetype(state *st, char *file)
 	/* Read data from the file */
 	if ((fp = fopen(file , "r")) == NULL) return st->default_filetype;
 	i = fread(buf, 1, sizeof(buf), fp);
+	buf[i] = '\0';
 	fclose(fp);
 
-	/* Binary or text? */
+	/* GIF images */
+	if (sstrncmp(buf, "GIF89a") == MATCH || 
+	    sstrncmp(buf, "GIF87a") == MATCH) return TYPE_GIF;
+
+	/* JPEG images */
+	if (sstrncmp(buf, "\377\330\377\340") == MATCH) return TYPE_IMAGE;
+
+	/* PNG images */
+	if (sstrncmp(buf, "\211PNG") == MATCH) return TYPE_IMAGE;
+
+	/* mbox */
+	if (strstr(buf, "\nFrom: ") &&
+	    strstr(buf, "\nSubject: ")) return TYPE_MIME;
+
+	/* HTML files */
+	if (buf[0] == '<' &&
+	    (strstr(buf, "<html") ||
+	     strstr(buf, "<HTML"))) return TYPE_HTML;
+
+	/* PDF and PostScript */
+	if (sstrncmp(buf, "%PDF-") == MATCH ||
+	    sstrncmp(buf, "%!") == MATCH) return TYPE_PDF;
+
+	/* compress and gzip */
+	if (sstrncmp(buf, "\037\235\220") == MATCH ||
+	    sstrncmp(buf, "\037\213\010") == MATCH) return TYPE_GZIP;
+
+	/* Unknown content - binary or text? */
 	if (memchr(buf, '\0', i)) return TYPE_BINARY;
 	return st->default_filetype;
 }

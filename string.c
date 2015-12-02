@@ -125,9 +125,23 @@ void chomp(char *str)
 
 
 /*
+ * Return charset name
+ */
+char *strcharset(int charset)
+{
+	if (charset == AUTO) return "auto";
+	if (charset == US_ASCII) return "US-ASCII";
+	if (charset == ISO_8859_1) return "ISO-8859-1";
+	if (charset == UTF_8) return "UTF-8";
+
+	return "(unknown)";
+}
+
+
+/*
  * Convert a string between UTF-8, ISO-8859-1 and US-ASCII
  */
-void strniconv(char *charset, char *out, char *in, size_t outsize)
+void strniconv(int charset, char *out, char *in, size_t outsize)
 {
 	char ascii[] = ASCII;
 	unsigned long c;
@@ -177,7 +191,7 @@ void strniconv(char *charset, char *out, char *in, size_t outsize)
 		 */
 
 		/* Handle UTF-8 */
-		if (strncasecmp(charset, "UTF-8", 5) == MATCH) {
+		if (charset == UTF_8) {
 			i = 0;
 
 			/* Two-byte encoding? */
@@ -198,8 +212,7 @@ void strniconv(char *charset, char *out, char *in, size_t outsize)
 		}
 
 		/* Handle ISO-8859-1 */
-		if (strncasecmp(charset, "ISO-8859-1", 10) == MATCH ||
-		    strncasecmp(charset, "Latin-1", 7) == MATCH) {
+		if (charset == ISO_8859_1) {
 
 			if (c >= 0xa0 && c <= 0xff)
 				*out++ = (unsigned char) c;

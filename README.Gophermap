@@ -94,8 +94,8 @@ Include links to users own gopherspaces:
 List all available virtual hosts:
 %
 
-Include sub-gophermap (the current TODO list):
-=TODO
+Include sub-gophermap:
+=LICENSE
 
 Execute script and parse output as subgophermap:
 =/usr/bin/uptime

@@ -66,11 +66,14 @@ void send_text_file(state *st)
 	FILE *fp;
 	char in[BUFSIZE];
 	char out[BUFSIZE];
+	int line;
 
 	if (st->debug) syslog(LOG_INFO, "outputting text file \"%s\"", st->req_realpath);
 	if ((fp = fopen(st->req_realpath , "r")) == NULL) return;
 
 	/* Loop through the file line by line */
+	line = 0;
+
 	while (fgets(in, sizeof(in), fp)) {
 
 		/* Covert to output charset & print */
@@ -81,10 +84,10 @@ void send_text_file(state *st)
 
 #ifdef ENABLE_STRICT_RFC1436
 		if (strcmp(out, ".") == MATCH) printf(".." CRLF);
-		else printf("%s" CRLF , out);
-#else
-		printf("%s" CRLF , out);
+		else
 #endif
+		printf("%s" CRLF, out);
+		line++;
 	}
 
 #ifdef ENABLE_STRICT_RFC1436
@@ -164,10 +167,6 @@ void server_status(state *st, shm_state *shm, int shmid)
 	/* Update counters */
 	shm->hits++;
 	shm->kbytes += 1;
-
-	/* Update session data */
-	st->req_filesize += 1024;
-	update_shm_session(st, shm);
 
 	/* Get server uptime */
 	now = time(NULL);
@@ -303,12 +302,12 @@ void setenv_cgi(state *st, char *script)
 	setenv("SCRIPT_FILENAME", script, 1);
 	setenv("REMOTE_ADDR", st->req_remote_addr, 1);
 	setenv("HTTP_REFERER", st->req_referrer, 1);
-	setenv("HTTP_ACCEPT_CHARSET", st->out_charset, 1);
+	setenv("HTTP_ACCEPT_CHARSET", strcharset(st->out_charset), 1);
 
 	/* Gophernicus extras */
 	snprintf(buf, sizeof(buf), "%c", st->req_filetype);
 	setenv("GOPHER_FILETYPE", buf, 1);
-	setenv("GOPHER_CHARSET", st->out_charset, 1);
+	setenv("GOPHER_CHARSET", strcharset(st->out_charset), 1);
 	setenv("GOPHER_REFERER", st->req_referrer, 1);
 	snprintf(buf, sizeof(buf), "%i", st->out_width);
 	setenv("COLUMNS", buf, 1);
@@ -384,8 +383,10 @@ void gopher_file(state *st)
 	}
 
 	/* Output regular files */
-	if (st->req_filetype == TYPE_TEXT) send_text_file(st);
-	else send_binary_file(st);
+	if (st->req_filetype == TYPE_TEXT || st->req_filetype == TYPE_MIME)
+		send_text_file(st);
+	else
+		send_binary_file(st);
 }
 
 

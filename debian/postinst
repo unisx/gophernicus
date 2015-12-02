@@ -21,7 +21,7 @@ if [ "$RET" ]; then
 fi
 
 # Generate inetd service
-SERVICE="gopher\t\tstream\ttcp\tnowait\t$USER\t/usr/sbin/$BINARY\t$BINARY -h $HOSTNAME -m $LOGDIR/server.log -f /usr/lib/$PACKAGE/filters -D /var/run/$PACKAGE-system-info"
+SERVICE="gopher\t\tstream\ttcp\tnowait\t$USER\t/usr/sbin/$BINARY\t$BINARY -h $HOSTNAME -l $LOGDIR/server.log -f /usr/lib/$PACKAGE/filters -D /var/run/$PACKAGE-system-info"
 
 # Configure gophernicus
 if [ "$1" = "configure" ]; then

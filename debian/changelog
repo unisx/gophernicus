@@ -1,3 +1,10 @@
+gophernicus (1.1) unstable; urgency=low
+
+  * New upstream release
+  * Security update, so upgrading is recommended
+
+ -- Kim Holviala <kim@holviala.com>  Sat, 16 Oct 2010 08:54:13 +0300
+
 gophernicus (1.0) unstable; urgency=low
 
   * Initial debianized release

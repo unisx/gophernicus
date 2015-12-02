@@ -30,7 +30,7 @@
  * Features
  */
 #undef  ENABLE_STRICT_RFC1436	/* Follow RFC1436 to the letter */
-#undef  ENABLE_AUTOHIDING	/* Hide manually listed resources from generated menus*/
+#undef  ENABLE_AUTOHIDING	/* Hide manually listed resources from generated menus */
 
 
 /*
@@ -74,7 +74,6 @@
 #include <errno.h>
 #include <pwd.h>
 #include <limits.h>
-#include <libgen.h>
 
 #ifdef HAVE_SENDFILE
 #include <sys/sendfile.h>
@@ -126,13 +125,22 @@
 #define TYPE_TEXT	'0'
 #define TYPE_MENU	'1'
 #define TYPE_ERROR	'3'
+#define TYPE_GZIP	'5'
 #define TYPE_QUERY	'7'
 #define TYPE_BINARY	'9'
 #define TYPE_GIF	'g'
 #define TYPE_HTML	'h'
 #define TYPE_INFO	'i'
 #define TYPE_IMAGE	'I'
+#define TYPE_MIME	'M'
+#define TYPE_PDF	'p'
 #define TYPE_TITLE	'!'
+
+/* Charsets */
+#define AUTO		0
+#define US_ASCII	1
+#define ISO_8859_1	2
+#define UTF_8		3
 
 /* HTTP protocol stuff for logging */
 #define HTTP_OK		200
@@ -152,7 +160,7 @@
 #define DEFAULT_PROXY	"http://gopherproxy.org/"
 #define DEFAULT_ADDR	"unknown"
 #define DEFAULT_WIDTH	70
-#define DEFAULT_CHARSET	"US-ASCII"
+#define DEFAULT_CHARSET	US_ASCII
 #define MIN_WIDTH	33
 #define MAX_WIDTH	200
 
@@ -233,8 +241,8 @@ typedef struct {
 	off_t req_filesize;
 
 	/* Output */
-	int  out_width;
-	char out_charset[16];
+	int out_width;
+	int out_charset;
 
 	/* Settings */
 	char server_description[64];
@@ -274,6 +282,7 @@ typedef struct {
 	char opt_iconv;
 	char opt_vhost;
 	char opt_query;
+	char opt_caps;
 	char opt_shm;
 	char debug;
 } state;
@@ -348,6 +357,7 @@ typedef struct {
 #define sstrlcpy(dest, src) strlcpy(dest, src, sizeof(dest))
 #define sstrlcat(dest, src) strlcat(dest, src, sizeof(dest))
 #define sstrncmp(s1, s2) strncmp(s1, s2, sizeof(s2) - 1)
+#define sstrncasecmp(s1, s2) strncasecmp(s1, s2, sizeof(s2) - 1)
 #define sstrniconv(charset, out, in) strniconv(charset, out, in, sizeof(out))
 
 

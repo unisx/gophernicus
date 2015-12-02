@@ -349,7 +349,7 @@ void init_state(state *st)
 
 	/* Output */
 	st->out_width = DEFAULT_WIDTH;
-	sstrlcpy(st->out_charset, DEFAULT_CHARSET);
+	st->out_charset = DEFAULT_CHARSET;
 
 	/* Settings */
 	strclear(st->server_platform);
@@ -387,6 +387,7 @@ void init_state(state *st)
 	st->opt_magic = TRUE;
 	st->opt_iconv = TRUE;
 	st->opt_query = TRUE;
+	st->opt_caps = TRUE;
 	st->opt_shm = TRUE;
 	st->debug = FALSE;
 
@@ -449,7 +450,7 @@ void parse_args(state *st, int argc, char *argv[])
 	int opt;
 
 	/* Parse args */
-	while ((opt = getopt(argc, argv, "h:p:r:t:g:a:c:u:m:w:o:s:i:k:f:e:D:L:P:n:dl?-")) != ERROR) {
+	while ((opt = getopt(argc, argv, "h:p:r:t:g:a:c:u:m:l:w:o:s:i:k:f:e:D:L:P:n:db?-")) != ERROR) {
 		switch(opt) {
 			case 'h': sstrlcpy(st->server_host, optarg); break;
 			case 'p': st->server_port = atoi(optarg); break;
@@ -459,10 +460,14 @@ void parse_args(state *st, int argc, char *argv[])
 			case 'a': sstrlcpy(st->map_file, optarg); break;
 			case 'c': sstrlcpy(st->cgi_file, optarg); break;
 			case 'u': sstrlcpy(st->user_dir, optarg);  break;
-			case 'm': sstrlcpy(st->log_file, optarg);  break;
+			case 'm': /* obsolete, replaced by -l */
+			case 'l': sstrlcpy(st->log_file, optarg);  break;
 
 			case 'w': st->out_width = atoi(optarg); break;
-			case 'o': sstrlcpy(st->out_charset, optarg);  break;
+			case 'o':
+				if (sstrncasecmp(optarg, "UTF-8") == MATCH) st->out_charset = UTF_8;
+				if (sstrncasecmp(optarg, "ISO-8859-1") == MATCH) st->out_charset = ISO_8859_1;
+				break;
 
 			case 's': st->session_timeout = atoi(optarg); break;
 			case 'i': st->session_max_kbytes = abs(atoi(optarg)); break;
@@ -484,11 +489,12 @@ void parse_args(state *st, int argc, char *argv[])
 				if (*optarg == 'o') { st->opt_iconv = FALSE; break; }
 				if (*optarg == 'q') { st->opt_query = FALSE; break; }
 				if (*optarg == 's') { st->opt_syslog = FALSE; break; }
+				if (*optarg == 'a') { st->opt_caps = FALSE; break; }
 				if (*optarg == 'm') { st->opt_shm = FALSE; break; }
 				break;
 
 			case 'd': st->debug = TRUE; break;
-			case 'l': printf(license); exit(EXIT_SUCCESS);
+			case 'b': printf(license); exit(EXIT_SUCCESS);
 			default : printf(readme); exit(EXIT_SUCCESS);
 		}
 	}
@@ -688,7 +694,7 @@ int main(int argc, char *argv[])
 	}
 	*dest = '\0';
 
-	/* Deny Slashdot users and /../ hackers */
+	/* Deny requests for Slashdot and /../ hackers */
 	if (strstr(st.req_selector, "/."))
 		die(&st, ERR_ACCESS, "Refusing to serve out dotfiles");
 
@@ -699,12 +705,6 @@ int main(int argc, char *argv[])
 		return OK;
 	}
 #endif
-
-	/* Handle /caps.txt requests */
-	if (sstrncmp(st.req_selector, CAPS_TXT) == MATCH) {
-		caps_txt(&st, shm);
-		return OK;
-	}
 
 	/* Remove possible extra cruft from server_host */
 	if ((c = strchr(st.server_host, '\t'))) *c = '\0';
@@ -718,7 +718,20 @@ int main(int argc, char *argv[])
 	/* Convert seletor to path & stat() */
 	selector_to_path(&st);
 	if (st.debug) syslog(LOG_INFO, "path to resource is \"%s\"", st.req_realpath);
-	if (stat(st.req_realpath, &file) == ERROR) die(&st, ERR_NOTFOUND, NULL);
+
+	if (stat(st.req_realpath, &file) == ERROR) {
+
+		/* Handle virtual /caps.txt requests */
+		if (st.opt_caps && sstrncmp(st.req_selector, CAPS_TXT) == MATCH) {
+			caps_txt(&st, shm);
+			return OK;
+		}
+
+		/* Requested file not found - die() */
+		die(&st, ERR_NOTFOUND, NULL);
+	}
+
+	/* Fetch request filesize from stat() */
 	st.req_filesize = file.st_size;
 
 	/* Everyone must have read access but no write access */
