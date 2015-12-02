@@ -259,11 +259,14 @@ void caps_txt(state *st, shm_state *shm)
 		"PathParent=.." CRLF
 		"PathParentDouble=FALSE" CRLF
 		"PathKeepPreDelimeter=FALSE" CRLF
+		"ServerSupportsStdinScripts=TRUE" CRLF
+		"ServerDefaultEncoding=%s" CRLF
 		CRLF
 		"ServerSoftware=" SERVER_SOFTWARE CRLF
 		"ServerSoftwareVersion=" VERSION CRLF
 		"ServerArchitecture=%s" CRLF,
 			st->session_timeout,
+			strcharset(st->out_charset),
 			st->server_platform);
 
 	/* Optional keys */
@@ -312,6 +315,10 @@ void setenv_cgi(state *st, char *script)
 	setenv("LOCAL_ADDR", st->req_local_addr, 1);
 	setenv("REMOTE_ADDR", st->req_remote_addr, 1);
 	setenv("HTTP_REFERER", st->req_referrer, 1);
+#ifdef HAVE_SHMEM
+	snprintf(buf, sizeof(buf), "%x", st->session_id);
+	setenv("SESSION_ID", buf, 1);
+#endif
 	setenv("HTTP_ACCEPT_CHARSET", strcharset(st->out_charset), 1);
 
 	/* Gophernicus extras */

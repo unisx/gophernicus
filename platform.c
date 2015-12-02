@@ -35,13 +35,11 @@ void platform(state *st)
 #if defined(_AIX) || defined(__linux) || defined(__APPLE__)
 	FILE *fp;
 #endif
-#if defined(__arm__) || defined(__mips__) || defined(__APPLE__)
-	char buf[BUFSIZE];
-#endif
 #ifdef __linux
 	struct stat file;
 #endif
 	struct utsname name;
+	char buf[BUFSIZE];
 	char sysname[64];
 	char release[64];
 	char machine[64];
@@ -114,7 +112,7 @@ void platform(state *st)
 	}
 #endif
 
-	/* Linux uname() just says Linux/2.6 - let's dig deeper... */
+	/* Linux uname() just says Linux/kernelversion - let's dig deeper... */
 #ifdef __linux
 
 	/* Most Linux ARM/MIPS boards have hardware name in /proc/cpuinfo */
@@ -156,6 +154,20 @@ void platform(state *st)
 		if ((c = strchr(sysname, ' '))) {
 			sstrlcpy(release, c + 1);
 			*c = '\0';
+		}
+	}
+
+	/* Identify CRUX */
+	if (!*sysname && stat("/usr/bin/crux", &file) == OK && (file.st_mode & S_IXOTH)) {
+
+		sstrlcpy(sysname, "CRUX");
+
+		if ((fp = popen("/usr/bin/crux", "r"))) {
+			fgets(buf, sizeof(buf), fp);
+			pclose(fp);
+
+			if ((c = strchr(buf, ' ')) && (c = strchr(c + 1, ' ')))
+				sstrlcpy(release, c + 1);
 		}
 	}
 
