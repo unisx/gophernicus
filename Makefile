@@ -8,7 +8,7 @@
 NAME    = gophernicus
 PACKAGE = $(NAME)
 BINARY  = in.$(NAME)
-VERSION = 1.5
+VERSION = 1.6
 
 SOURCES = $(NAME).c file.c menu.c string.c platform.c session.c options.c
 HEADERS = functions.h files.h
@@ -88,7 +88,10 @@ headers: $(HEADERS)
 functions.h:
 	echo "/* Automatically generated function definitions */" > $@
 	echo >> $@
-	grep -h "^[a-z]" $(SOURCES) | grep -v "int main" | sed -e "s/ =.*$$//" -e "s/ *$$/;/" >> $@
+	grep -h "^[a-z]" $(SOURCES) | \
+		grep -v "int main" | \
+		grep -v "strlc" | \
+		sed -e "s/ =.*$$//" -e "s/ *$$/;/" >> $@
 	@echo
 
 bin2c: bin2c.c
@@ -247,6 +250,7 @@ dist: clean functions.h ChangeLog
 
 release: dist
 	cp $(TGZ) $(RELDIR)
+	cp README INSTALL ChangeLog $(RELDIR)
 
 
 #

@@ -34,8 +34,6 @@ void strniconv(int charset, char *out, char *in, size_t outsize);
 void strnencode(char *out, const char *in, size_t outsize);
 void strndecode(char *out, char *in, size_t outsize);
 void strfsize(char *out, off_t size, size_t outsize);
-size_t strlcpy(char *dst, const char *src, size_t siz);
-size_t strlcat(char *dst, const char *src, size_t siz);
 void platform(state *st);
 float loadavg(void);
 int get_shm_session_id(state *st, shm_state *shm);

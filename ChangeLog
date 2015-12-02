@@ -1,7 +1,25 @@
 [ Automatically generated from git log ]
 
+2014-11-10  Kim Holviala  <kim@holviala.com>
+
+	* Released version 1.6
+	* Fix compiling for MacOS X Yosemite
+
+2014-05-15  Kim Holviala  <kim@holviala.com>
+
+	* Updated TODO for systemd/upstart
+	* Fix platform detection for Slackware (and possibly others)
+
+2014-02-01  Kim Holviala  <kim@holviala.com>
+
+	* Add license header to bin2c.c
+	* Up version number to 1.6-whatever
+
 2014-01-25  Kim Holviala  <kim@holviala.com>
 
+	* Remove 'only tested with GCC' from INSTALL
+	* Automatically copy ChangeLog to distribution dir on release
+	* Automatically copy INSTALL & README to distribution dir on release
 	* Add deb packaging leftovers to .gitignore
 	* Up version number to 1.5 + include forgotten file git2changelog
 	* Don't update ChangeLog unless the source tree is a git repo
