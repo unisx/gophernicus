@@ -1,5 +1,5 @@
 /*
- * Gophernicus Server - Copyright (c) 2009-2010 Kim Holviala <kim@holviala.com>
+ * Gophernicus - Copyright (c) 2009-2010 Kim Holviala <kim@holviala.com>
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -25,6 +25,7 @@
 
 #include "gophernicus.h"
 
+
 /*
  * Repeat a character num times and zero-terminate
  */
@@ -32,6 +33,18 @@ void strrepeat(char *dest, char c, size_t num)
 {
 	memset(dest, c, num);
 	dest[num] = '\0';
+}
+
+
+/*
+ * Replace characters in-place
+ */
+void strreplace(char *str, char from, char to)
+{
+	while (*str) {
+		if (*str == from) *str = to;
+		str++;
+	}
 }
 
 
@@ -64,9 +77,9 @@ int strcut(char *str, size_t width)
 
 
 /*
- * Match header line and return value (Key: Value)
+ * Match key and return value (key: value)
  */
-char *strheader(char *header, char *key)
+char *strkey(char *header, char *key)
 {
 	char *c;
 	size_t len;
@@ -75,6 +88,8 @@ char *strheader(char *header, char *key)
 
 	if (strncasecmp(header, key, len) == MATCH) {
 		c = header + len;
+		while (*++c == ' ');
+
 		if (*c != ':') return NULL;
 
 		while (*++c == ' ');

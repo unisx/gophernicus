@@ -1,26 +1,28 @@
-Compiling and installing Gophernicus Server
-===========================================
+Compiling and installing Gophernicus
+====================================
 
 Gophernicus requires a C compiler but no extra libraries aside
 from standard LIBC ones. Care has been taken to use only
 standard POSIX syscalls so that it should work pretty much on
-any *nix system. 
+any *nix system. Compiling has only been tested with GCC, but
+it will most likely work with others too.
 
 To compile and install run:
 
-$ gzip -cd gophernicus-server-*.tar.gz | tar xvf -
-$ cd gophernicus-server-*
+$ gzip -cd gophernicus-*.tar.gz | tar xvf -
+$ cd gophernicus-*
 $ make
 $ sudo make install
 
-The add something like this to your /etc/inetd.conf and restart
-inetd (or kill -HUP or whatever):
+Then add the below line to your /etc/inetd.conf and restart
+inetd. If your system comes with something else than standard
+inetd make install should have done the right thing already.
 
 gopher  stream  tcp  nowait  nobody  /usr/sbin/in.gophernicus  in.gophernicus -h <hostname>
 
 The -h <hostname> parameter is mandatory for a properly working
-Gophernicus Server. Other parameters can also be added, see the
-full list by running "/usr/sbin/in.gophernicus -?"
+Gophernicus. Other parameters can also be added, see the full
+list by running "/usr/sbin/in.gophernicus -?"
 
 By default Gophernicus serves gopher documents from /var/gopher
 although that can be changed by using the -r <root> parameter.
@@ -28,6 +30,36 @@ To enable virtual hosting create hostname directories under
 the gopher root and make sure you have at least the primary
 hostname (the one set with -h <hostname>) directory available
 (mkdir /var/gopher/$HOSTNAME).
+
+
+Compiling on Debian Linux (and Ubuntu)
+======================================
+
+The above commands work on Debian just fine, but if you prefer
+having everything installed as packages run "make deb" instead
+of plain "make". If all the dependencies were in place you'll
+end up with an offical-looking deb package in the parent
+directory (don't ask - that's just how it works). And instead
+of "sudo make install" you should just install the deb with
+"dpkg -i ../gophernicus_*.deb" after which It Should Just
+Work(tm).
+
+
+Compiling on Mac OS X
+=====================
+
+By default Gophernicus compiles a 32-bit Carbon version of the
+server daemon and advertises itself as running on "MacOSX" with
+the OS version and platform looking like something Apple
+advertises with. If you want to compile the generic Unix
+version run "make generic" and you'll end up with a Darwin
+version instead (which could also be 64-bit).
+
+When you run "make install" on OSX-like system with launchd
+the install routine also installs a plist file and tells launchd
+to start the server up. In other words, It Just Works(tm)...
+
+... unlike the underlying OS which mostly sucks :-D.
 
 
 Shared memory issues
@@ -46,7 +78,7 @@ let Gophernicus recreate it - no harm done.
 
 $ su -
 # ipcs -m | grep beeb
-# ipcs -M <key from the above command>
+# ipcrm -M <key from the above command>
 
 
 Porting to different platforms
@@ -65,8 +97,9 @@ Tested and semi-supported platforms include:
  +-------------+-------------+-------------+
   AIX 5.1       POWER3        gcc 4.0.0
   AIX 6.1       POWER4        gcc 4.2.0
-  Linux 2.6     x86_64        gcc 4.1.3
-  Linux 2.6     armv5tel      gcc 4.3.2
+  CentOS 5.5    x86_64        gcc 4.1.2
+  Debian Linux  x86_64        gcc 4.1.3
+  Debian Linux  armv5tel      gcc 4.3.2
+  MacOSX 10.5   i386          gcc 4.0.1
   NetBSD 5.0    amd64         gcc 4.1.3
-
 

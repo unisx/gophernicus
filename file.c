@@ -1,5 +1,5 @@
 /*
- * Gophernicus Server - Copyright (c) 2009-2010 Kim Holviala <kim@holviala.com>
+ * Gophernicus - Copyright (c) 2009-2010 Kim Holviala <kim@holviala.com>
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -71,10 +71,10 @@ void send_text_file(state *st)
 	if ((fp = fopen(st->req_realpath , "r")) == NULL) return;
 
 	/* Loop through the file line by line */
-	while (fgets(in, sizeof(in), fp) != NULL) {
+	while (fgets(in, sizeof(in), fp)) {
 
 		/* Covert to output charset & print */
-		if (st->opt_iconv) strniconv(st->out_charset, out, in, sizeof(out));
+		if (st->opt_iconv) sstrniconv(st->out_charset, out, in);
 		else sstrlcpy(out, in);
 
 		chomp(out);
@@ -99,21 +99,29 @@ void send_text_file(state *st)
  */
 void url_redirect(state *st)
 {
+	char dest[BUFSIZE];
 	char *c;
+
+	/* Basic security checking */
+	sstrlcpy(dest, st->req_selector + 4);
+
+	if (sstrncmp(dest, "http://") != MATCH &&
+	    sstrncmp(dest, "ftp://") != MATCH &&
+	    sstrncmp(dest, "mailto:") != MATCH)
+		die(st, ERR_ACCESS, "Refusing to HTTP redirect unsafe protocols");
+
+	if ((c = strchr(dest, '"'))) *c = '\0';
+	if ((c = strchr(dest, '?'))) *c = '\0';
 
 	/* Log the redirect */
 	if (st->opt_syslog) {
-		syslog(LOG_INFO, "request for \"hURL:%s\" from %s",
-			st->req_selector, st->req_remote_addr);
+		syslog(LOG_INFO, "request for \"gopher://%s:%i/h%s\" from %s",
+			st->server_host,
+			st->server_port,
+			st->req_selector,
+			st->req_remote_addr);
 	}
-
-	/* Basic security checking */
-	if (sstrncmp(st->req_selector, "http://") != MATCH &&
-	    sstrncmp(st->req_selector, "ftp://") != MATCH &&
-	    sstrncmp(st->req_selector, "mailto:") != MATCH) die(st, ERR_ACCESS);
-
-	if ((c = strchr(st->req_selector, '"'))) *c = '\0';
-	if ((c = strchr(st->req_selector, '?'))) *c = '\0';
+	log_combined(st, HTTP_OK);
 
 	/* Output HTML */
 	printf("<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 3.2 Final//EN\">\n"
@@ -123,7 +131,7 @@ void url_redirect(state *st)
 		"  <TITLE>URL Redirect page</TITLE>\n"
 		"</HEAD>\n<BODY>\n"
 		"<STRONG>Redirecting to <A HREF=\"%1$s\">%1$s</A></STRONG>\n"
-		"<PRE>\n", st->req_selector);
+		"<PRE>\n", dest);
 	footer(st);
 	printf("</PRE>\n</BODY>\n</HTML>\n");
 }
@@ -143,13 +151,23 @@ void server_status(state *st, shm_state *shm, int shmid)
 
 	/* Log the request */
 	if (st->opt_syslog) {
-		syslog(LOG_INFO, "request for \"/server-status\" from %s",
+		syslog(LOG_INFO, "request for \"gopher://%s:%i/0" SERVER_STATUS "\" from %s",
+			st->server_host,
+			st->server_port,
 			st->req_remote_addr);
 	}
+	log_combined(st, HTTP_OK);
+
+	/* Quit if shared memory isn't initialized yet */
+	if (!shm) return;
 
 	/* Update counters */
 	shm->hits++;
 	shm->kbytes += 1;
+
+	/* Update session data */
+	st->req_filesize += 1024;
+	update_shm_session(st, shm);
 
 	/* Get server uptime */
 	now = time(NULL);
@@ -197,9 +215,62 @@ void server_status(state *st, shm_state *shm, int shmid)
 	}
 
 	printf("Total Sessions: %i" CRLF, sessions);
-	printf("Server: " SERVER_SOFTWARE CRLF, st->server_platform);
 }
 #endif
+
+
+/*
+ * Handle /caps.txt
+ */
+void caps_txt(state *st, shm_state *shm)
+{
+	/* Log the request */
+	if (st->opt_syslog) {
+		syslog(LOG_INFO, "request for \"gopher://%s:%i/0" CAPS_TXT "\" from %s",
+			st->server_host,
+			st->server_port,
+			st->req_remote_addr);
+	}
+	log_combined(st, HTTP_OK);
+
+	/* Update counters */
+#ifdef HAVE_SHMEM
+	if (shm) {
+		shm->hits++;
+		shm->kbytes += 1;
+
+		/* Update session data */
+		st->req_filesize += 1024;
+		update_shm_session(st, shm);
+	}
+#endif
+
+	/* Standard caps.txt stuff */
+	printf("CAPS" CRLF
+		CRLF
+		"##" CRLF
+		"## This is an automatically generated caps file." CRLF
+		"##" CRLF
+		CRLF
+		"CapsVersion=1" CRLF
+		"ExpireCapsAfter=%i" CRLF
+		CRLF
+		"PathDelimeter=/" CRLF
+		"PathIdentity=." CRLF
+		"PathParent=.." CRLF
+		"PathParentDouble=FALSE" CRLF
+		"PathKeepPreDelimeter=FALSE" CRLF
+		CRLF
+		"ServerSoftware=" SERVER_SOFTWARE CRLF
+		"ServerSoftwareVersion=" VERSION CRLF
+		"ServerArchitecture=%s" CRLF,
+			st->session_timeout,
+			st->server_platform);
+
+	/* Optional keys */
+	if (*st->server_description)
+		printf("ServerDescription=%s" CRLF, st->server_description);
+}
 
 
 /*
@@ -216,9 +287,13 @@ void setenv_cgi(state *st, char *script)
 	setenv("GATEWAY_INTERFACE", "CGI/1.1", 1);
 	setenv("CONTENT_LENGTH", "0", 1);
 	setenv("QUERY_STRING", st->req_query_string, 1);
-	snprintf(buf, sizeof(buf), SERVER_SOFTWARE, st->server_platform);
+	snprintf(buf, sizeof(buf), SERVER_SOFTWARE_FULL, st->server_platform);
 	setenv("SERVER_SOFTWARE", buf, 1);
-	setenv("SERVER_PROTOCOL", "RFC1436", 1);
+	setenv("SERVER_ARCH", st->server_platform, 1);
+	setenv("SERVER_DESCRIPTION", st->server_description, 1);
+	snprintf(buf, sizeof(buf), SERVER_SOFTWARE "/" VERSION);
+	setenv("SERVER_VERSION", buf, 1);
+	setenv("SERVER_PROTOCOL", SERVER_PROTOCOL, 1);
 	setenv("SERVER_NAME", st->server_host, 1);
 	snprintf(buf, sizeof(buf), "%i", st->server_port);
 	setenv("SERVER_PORT", buf, 1);
@@ -264,7 +339,7 @@ void run_cgi(state *st, char *script, char *arg)
 	execl(script, script, arg, NULL);
 
 	/* Didn't work - die */
-	die(st, ERR_EXE);
+	die(st, ERR_ACCESS, NULL);
 }
 
 
@@ -277,12 +352,16 @@ void gopher_file(state *st)
 	char buf[BUFSIZE];
 	char *c;
 
-	/* Refuse to serve out gophermaps */
+	/* Refuse to serve out gophermaps/tags */
 	if ((c = strrchr(st->req_realpath, '/'))) c++;
 	else c = st->req_realpath;
-	if (strcmp(c, st->map_file) == MATCH) die(st, ERR_ACCESS);
 
-	/* Check for & run CGI scripts and query scripts */
+	if (strcmp(c, st->map_file) == MATCH)
+		die(st, ERR_ACCESS, "Refusing to serve out a gophermap file");
+	if (strcmp(c, st->tag_file) == MATCH)	
+		die(st, ERR_ACCESS, "Refusing to serve out a gophertag file");
+
+	/* Check for & run CGI and query scripts */
 	if (strstr(st->req_realpath, st->cgi_file) || st->req_filetype == TYPE_QUERY)
 		run_cgi(st, st->req_realpath, NULL);
 

@@ -1,3 +1,40 @@
+2010-10-05  Kim Holviala  <kim@holviala.com>
+
+	* Released version 1.0
+	* Support for caps.txt as suggested by Cameron Kaiser
+	* Support for gophertags (lifted from Bucktooth)
+	* HTTP requests are redirected to a public gopher proxy
+	* Allow directories named "gophermap" and "gophertag"
+	  (only files are special)
+	* Removed duplicate call to strniconv()
+	* A few ENABLE_STRICT_RFC1436 additions
+	* Much more descriptive error logging
+	* Self references /./ are removed from request
+	* Apache-compatible file logging in combined log format (-m)
+	* FIFOs in directories no longer crash the server (duh!)
+	* Support for Mac OS X (tested with 10.5 on Intel)
+	* Reworked Makefile with platform-specific build targets
+	* Fixed a call to dirname(path) (don't assume it modifies path)
+        * Makefile installer now supports xinetd and launchd
+	* Makefile installer installs default /var/gopher/gophermap and
+	  links the document directory as /docs/
+	* Added SERVER_ARCH, SERVER_VERSION and SERVER_DESCRIPTION to
+	  CGI env variables
+	* Fixed a segfault where shm was used uninitialized (duh!)
+	* Generate native Debian/Ubuntu package with "make deb"
+	* platform() now tries to figure out Linux distribution
+	* platform() knows about Linux ARM boards
+	* Added argument -nm (No shared Memory) for debugging
+	* Fixed AIX make glitch when compiling bin2c (bug in make?)
+	* Changed the name of the project from "Gophernicus Server"
+	  to plain "Gophernicus"
+	* Menus without footer (-nf) were missing the dot at the end
+	* Footer message is now right-aligned
+	* server-status and caps.txt requests now update sessions
+	* Compile-time option ENABLE_AUTOHIDING hides manually listed
+	  resources from generated menus (to prevent double listings)
+
+
 2010-07-03  Kim Holviala  <kim@holviala.com>
 
 	* Released version 0.9

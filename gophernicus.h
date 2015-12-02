@@ -1,5 +1,5 @@
 /*
- * Gophernicus Server - Copyright (c) 2009-2010 Kim Holviala <kim@holviala.com>
+ * Gophernicus - Copyright (c) 2009-2010 Kim Holviala <kim@holviala.com>
  * All rights reserved.
  * 
  * Redistribution and use in source and binary forms, with or without
@@ -30,6 +30,7 @@
  * Features
  */
 #undef  ENABLE_STRICT_RFC1436	/* Follow RFC1436 to the letter */
+#undef  ENABLE_AUTOHIDING	/* Hide manually listed resources from generated menus*/
 
 
 /*
@@ -121,7 +122,6 @@
 
 #define MATCH		0
 
-
 /* Gopher filetypes */
 #define TYPE_TEXT	'0'
 #define TYPE_MENU	'1'
@@ -134,14 +134,22 @@
 #define TYPE_IMAGE	'I'
 #define TYPE_TITLE	'!'
 
+/* HTTP protocol stuff for logging */
+#define HTTP_OK		200
+#define HTTP_404	404
+#define HTTP_DATE	"%d/%b/%Y:%T %z"
+#define HTTP_USERAGENT	"Unknown gopher client"
+
 /* Defaults for settings */
 #define DEFAULT_ROOT	"/var/gopher"
 #define DEFAULT_HOST	"localhost"
 #define DEFAULT_PORT	70
 #define DEFAULT_TYPE	TYPE_TEXT
 #define DEFAULT_MAP	"gophermap"
+#define DEFAULT_TAG	"gophertag"
 #define DEFAULT_CGI	"/cgi-bin/"
 #define DEFAULT_USERDIR	"public_gopher"
+#define DEFAULT_PROXY	"http://gopherproxy.org/"
 #define DEFAULT_ADDR	"unknown"
 #define DEFAULT_WIDTH	70
 #define DEFAULT_CHARSET	"US-ASCII"
@@ -162,19 +170,19 @@
 
 /* Special requests */
 #define SERVER_STATUS	"/server-status"
+#define CAPS_TXT	"/caps.txt"
 
 /* Error messages */
 #define ERR_ACCESS	"Access denied!"
 #define ERR_NOTFOUND	"File or directory not found!"
-#define ERR_ROOT	"Refusing to run as root!"
-#define ERR_NOSEL	"No selector!"
-#define ERR_EXE		"Couldn't execute file!"
 
 #define ERROR_HOST	"error.host\t1"
 #define ERROR_PREFIX	"Error: "
 
 /* String formats */
-#define SERVER_SOFTWARE	"Gophernicus/" VERSION " (%s)"
+#define SERVER_SOFTWARE	"Gophernicus"
+#define SERVER_PROTOCOL	"RFC1436"
+#define SERVER_SOFTWARE_FULL SERVER_SOFTWARE "/" VERSION " (%s)"
 #define HEADER_FORMAT	"[%s]"
 #define FOOTER_FORMAT	"Gophered by Gophernicus/" VERSION " on %s"
 
@@ -229,6 +237,7 @@ typedef struct {
 	char out_charset[16];
 
 	/* Settings */
+	char server_description[64];
 	char server_platform[64];
 	char server_root[256];
 	char server_host_default[64];
@@ -237,8 +246,11 @@ typedef struct {
 
 	char default_filetype;
 	char map_file[64];
+	char tag_file[64];
 	char cgi_file[64];
 	char user_dir[64];
+	char log_file[256];
+	char gopher_proxy[128];
 
 	char hidden[MAX_HIDDEN][256];
 	int hidden_count;
@@ -262,13 +274,14 @@ typedef struct {
 	char opt_iconv;
 	char opt_vhost;
 	char opt_query;
+	char opt_shm;
 	char debug;
 } state;
 
 /* Shared memory for session & accounting data */
 #ifdef HAVE_SHMEM
 
-#define SHM_KEY		0xbeeb0005	/* Unique identifier + struct version */
+#define SHM_KEY		0xbeeb0006	/* Unique identifier + struct version */
 #define SHM_MODE	0600		/* Access mode for the shared memory */
 #define SHM_SESSIONS	256		/* Max amount of user sessions to track */
 
@@ -290,6 +303,7 @@ typedef struct {
 	long hits;
 	long kbytes;
 	char server_platform[64];
+	char server_description[64];
 	shm_session session[SHM_SESSIONS];
 } shm_state;
 
@@ -334,6 +348,7 @@ typedef struct {
 #define sstrlcpy(dest, src) strlcpy(dest, src, sizeof(dest))
 #define sstrlcat(dest, src) strlcat(dest, src, sizeof(dest))
 #define sstrncmp(s1, s2) strncmp(s1, s2, sizeof(s2) - 1)
+#define sstrniconv(charset, out, in) strniconv(charset, out, in, sizeof(out))
 
 
 /*

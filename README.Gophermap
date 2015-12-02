@@ -1,4 +1,4 @@
-!Sample gophermap for the Gohphernicus Server
+!Sample gophermap for Gohphernicus
 
 ##
 ## This is a sample gophermap.
@@ -19,7 +19,7 @@ describing the menu.
 
 Dynamic gophermaps are possible by making the gophermap a script and
 marking it as executable. All script output is parsed just like a
-static gophermap, so lines without tabs are converted to "i"
+static gophermap, for example lines without tabs are converted to "i"
 resources. Executable gophermaps are always ran through the default
 shell (/bin/sh) so depending on your operating system that's either
 slow, or really unbearably slow...
@@ -66,9 +66,9 @@ Additional type characters supported by Gophernicus:
 
 Examples of valid resource lines:
 
-1subdir/	
-1Relative internal link	subdir/
-1Absolute internal link	/
+1subdir	
+1Relative internal link	subdir
+1Absolute internal link	/subdir
 1External link 	/	gopher.floodgap.com	70
 1External relative link (which shouldn't work)	subdir/	gopher.domain.dom	70
 0Finger-to-gopher link	kimmy	holviala.com	79
