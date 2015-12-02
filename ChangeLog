@@ -1,6 +1,19 @@
+2012-05-04  Kim Holviala  <kim@holviala.com>
+
+	* Released version 1.2 (finally...)
+	* On the fly selector rewriting (like Apache mod_rewrite)
+	* Gophertags are properly converted to output charset
+	* Server admin email can be specified for caps.txt
+	* Server location for caps.txt
+	* Split options.c from gophernicus.c
+	* Removed support for Gopher over HTTP proxies
+	* Hack to make "gopher example.com" work
+	  (UMN gopher client assumes gopher+ which we don't support)
+
+
 2010-12-01  Kim Holviala  <kim@holviala.com>
 
-	* Version 1.1
+	* Released version 1.1
 	* Content-based detection of gif/png/jpg/ps/pdf/html/gz
 	* Gophermap virtual host list (%) only lists FQDNs
 	* Serve out caps.txt from a file if it exists

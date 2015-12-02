@@ -8,9 +8,9 @@
 NAME    = gophernicus
 PACKAGE = $(NAME)
 BINARY  = in.$(NAME)
-VERSION = 1.1
+VERSION = 1.2
 
-SOURCES = $(NAME).c file.c menu.c string.c platform.c session.c
+SOURCES = $(NAME).c file.c menu.c string.c platform.c session.c options.c
 HEADERS = functions.h files.h
 OBJECTS = $(SOURCES:.c=.o)
 DOCS    = LICENSE README INSTALL TODO ChangeLog README.Gophermap gophertag

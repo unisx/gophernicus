@@ -1,10 +1,10 @@
-Gophernicus - Copyright (c) 2009-2010 Kim Holviala <kim@holviala.com>
+Gophernicus - Copyright (c) 2009-2012 Kim Holviala <kim@holviala.com>
 
 Gophernicus is a modern full-featured (and hopefully) secure gopher
 daemon for inetd. It is licensed under the BSD license.
 
 Command line options:
-    -h hostname   Change server hostname             [$HOSTNAME]
+    -h hostname   Change server hostname (FQDN)      [$HOSTNAME]
     -p port       Change server port                 [70]
     -r root       Change gopher root                 [/var/gopher]
     -t type       Change default gopher filetype     [0]
@@ -24,8 +24,10 @@ Command line options:
     -f filterdir  Specify directory for output filters
     -e ext=type   Map file extension to gopher filetype
 
+    -R old=new    Rewrite the beginning of a selector
     -D text|file  Set or load server description for caps.txt
-    -P proxy      Change gopher-to-HTTP proxy URL    [gopherproxy.org]
+    -L text|file  Set or load server location for caps.txt
+    -A admin      Set admin email for caps.txt
 
     -nv           Disable virtual hosting
     -nl           Disable parent directory links
@@ -87,8 +89,13 @@ gophermaps. See the file README.gophermap for more information.
 Gophertags
 ==========
 
-A gophertag file can be used to rename a directory without renaming
-the di... uh, confusing. Ask Cameron.
+A gophertag file can be used to virtually rename a directory. Let's
+assume that you have a directory called "foo" somewhere - it will
+be listed as "foo" in all automatically generated menus. Now if you
+create a file foo/gophertag and put the text "bar" into it the menus
+will show "bar" but the links will still point to "foo". This is
+useful for creating descriptive names for directories without
+littering the file system with spaces and weird characters.
 
 
 Personal gopherspaces
@@ -189,15 +196,32 @@ something else than US-ASCII just use for example the "-o ISO-8859-1"
 option.
 
 
+Selector rewriting
+==================
+
+Selector rewriting lets you rewrite parts of the selector on the fly.
+Well, not parts, but really just the start of it. And the rewrite
+enging here is nothing like Apache's mod_rewrite as I was too lazy
+to integrate any regex libraries... So, all it does is rewrite a
+fixed string at the start of the selector to something else. This
+will let you move your directories around while making sure that
+existing deeplinks still work.
+
+Examples:
+
+  -R "/~user=/~luser"
+  -R "/old-dir=/new-dir"
+
+
 Session tracking and statistics
 ===============================
 
 To enable virtual hosting with gopher (RFC1436) clients Gophernicus
 tracks users and their session. As a side effect of that session
 tracking, Gophernicus has simple throttling controls to keep nasty
-users from killing your precious 120MHz 604e server from dying under
-the load. The throttling defaults are high enough that normal human
-users will never hit the limits, but it's possible (and mostly
+users from killing your precious 120MHz PPC 604e server from dying
+under the load. The throttling defaults are high enough that normal
+human users will never hit the limits, but it's possible (and mostly
 preferrable) that a badly behaving crawling agent will be throttled.
 
 The current sessions and other real-time status data can be viewed

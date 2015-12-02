@@ -50,16 +50,14 @@ Compiling on Mac OS X
 
 By default Gophernicus compiles a 32-bit Carbon version of the
 server daemon and advertises itself as running on "MacOSX" with
-the OS version and platform looking like something Apple
-advertises with. If you want to compile the generic Unix
-version run "make generic" and you'll end up with a Darwin
-version instead (which could also be 64-bit).
+the OS version and platform looking like the offical Apple ones.
+If you want to compile the generic Unix version run
+"make generic" and you'll end up with a Darwin version instead
+(which could also be 64-bit).
 
 When you run "make install" on OSX-like system with launchd
 the install routine also installs a plist file and tells launchd
-to start the server up. In other words, It Just Works(tm)...
-
-... unlike the underlying OS which mostly sucks :-D.
+to start the server up. In other words, It Just Works(tm).
 
 
 Shared memory issues
@@ -91,15 +89,16 @@ server. And if you succeed in compiling Gophernicus to a new
 platform please send the patches to kim@holviala.com so I can 
 include them into the next release.
 
-Tested and semi-supported platforms include:
+Tested (and semi-supported) platforms include:
 
   OS            Arch          Compiler
  +-------------+-------------+-------------+
   AIX 5.1       POWER3        gcc 4.0.0
   AIX 6.1       POWER4        gcc 4.2.0
   CentOS 5.5    x86_64        gcc 4.1.2
-  Debian Linux  x86_64        gcc 4.1.3
+  Debian Linux  x86_64        gcc 4.4.5
   Debian Linux  armv5tel      gcc 4.3.2
   MacOSX 10.5   i386          gcc 4.0.1
   NetBSD 5.0    amd64         gcc 4.1.3
+
 

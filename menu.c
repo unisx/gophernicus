@@ -1,5 +1,5 @@
 /*
- * Gophernicus - Copyright (c) 2009-2010 Kim Holviala <kim@holviala.com>
+ * Gophernicus - Copyright (c) 2009-2012 Kim Holviala <kim@holviala.com>
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -573,7 +573,13 @@ void gopher_menu(state *st)
 					fclose(fp);
 
 					/* Skip empty gophertags */
-					if (*buf) sstrlcpy(displayname, buf);
+					if (*buf) {
+
+						/* Convert to output charset */
+						if (st->opt_iconv) sstrniconv(st->out_charset, displayname, buf);
+						else sstrlcpy(displayname, buf);
+					}
+
 				}
 			}
 

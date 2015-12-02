@@ -1,5 +1,5 @@
 /*
- * Gophernicus - Copyright (c) 2009-2010 Kim Holviala <kim@holviala.com>
+ * Gophernicus - Copyright (c) 2009-2012 Kim Holviala <kim@holviala.com>
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -269,6 +269,10 @@ void caps_txt(state *st, shm_state *shm)
 	/* Optional keys */
 	if (*st->server_description)
 		printf("ServerDescription=%s" CRLF, st->server_description);
+	if (*st->server_location)
+		printf("ServerGeolocationString=%s" CRLF, st->server_location);
+	if (*st->server_admin)
+		printf("ServerAdmin=%s" CRLF, st->server_admin);
 }
 
 

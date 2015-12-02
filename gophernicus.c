@@ -1,5 +1,5 @@
 /*
- * Gophernicus - Copyright (c) 2009-2010 Kim Holviala <kim@holviala.com>
+ * Gophernicus - Copyright (c) 2009-2012 Kim Holviala <kim@holviala.com>
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -206,10 +206,33 @@ void selector_to_path(state *st)
 	struct stat file;
 #ifdef HAVE_PASSWD
 	struct passwd *pwd;
-	char buf[BUFSIZE];
 	char *path = EMPTY;
 	char *c;
+#endif
+	char buf[BUFSIZE];
+	int i;
 
+	/* Handle selector rewriting */
+	for (i = 0; i < st->rewrite_count; i++) {
+
+		/* Match found? */
+		if (strstr(st->req_selector, st->rewrite[i].match) == st->req_selector) {
+
+			/* Replace match with a new string */
+			snprintf(buf, sizeof(buf), "%s%s",
+				st->rewrite[i].replace,
+				st->req_selector + strlen(st->rewrite[i].match));
+
+			if (st->debug) {
+				syslog(LOG_INFO, "rewriting selector \"%s\" -> \"%s\"",
+					st->req_selector, buf);
+			}
+
+			sstrlcpy(st->req_selector, buf);
+		}
+	}
+
+#ifdef HAVE_PASSWD
 	/* Virtual userdir (~user -> /home/user/public_gopher)? */
 	if (*(st->user_dir) && sstrncmp(st->req_selector, "/~") == MATCH) {
 
@@ -335,6 +358,8 @@ char *get_peer_address(void)
 void init_state(state *st)
 {
 	static const char *filetypes[] = { FILETYPES };
+	char buf[BUFSIZE];
+	char *c;
 	int i;
 
 	/* Request */
@@ -342,7 +367,7 @@ void init_state(state *st)
 	strclear(st->req_realpath);
 	strclear(st->req_query_string);
 	strclear(st->req_referrer);
-	sstrlcpy(st->req_remote_addr, DEFAULT_ADDR);
+	sstrlcpy(st->req_remote_addr, get_peer_address());
 	/* strclear(st->req_remote_host); */
 	st->req_filetype = DEFAULT_TYPE;
 	st->req_filesize = 0;
@@ -352,10 +377,14 @@ void init_state(state *st)
 	st->out_charset = DEFAULT_CHARSET;
 
 	/* Settings */
-	strclear(st->server_platform);
 	sstrlcpy(st->server_root, DEFAULT_ROOT);
 	sstrlcpy(st->server_host_default, DEFAULT_HOST);
-	sstrlcpy(st->server_host, DEFAULT_HOST);
+
+	if ((c = getenv("HOSTNAME")))
+		sstrlcpy(st->server_host, c);
+	else if ((gethostname(buf, sizeof(buf))) != ERROR)
+		sstrlcpy(st->server_host, buf);
+
 	st->server_port = DEFAULT_PORT;
 
 	st->default_filetype = DEFAULT_TYPE;
@@ -368,9 +397,12 @@ void init_state(state *st)
 	st->hidden_count = 0;
 	st->filetype_count = 0;
 	strclear(st->filter_dir);
+	st->rewrite_count = 0;
 
 	strclear(st->server_description);
-	sstrlcpy(st->gopher_proxy, DEFAULT_PROXY);
+	strclear(st->server_location);
+	strclear(st->server_platform);
+	strclear(st->server_admin);
 
 	/* Session */
 	st->session_timeout = DEFAULT_SESSION_TIMEOUT;
@@ -398,132 +430,6 @@ void init_state(state *st)
 			st->filetype[st->filetype_count].type = *filetypes[i + 1];
 			st->filetype_count++;
 		}
-	}
-}
-
-
-/*
- * Add one suffix->filetype mapping to the filetypes array
- */
-void add_ftype_mapping(state *st, char *suffix)
-{
-	char *type;
-	int i;
-
-	/* Let's not do anything stupid */
-	if (!*suffix) return;
-	if (!(type = strchr(suffix, '='))) return;
-
-	/* Extract type from the suffix:X string */
-	*type++ = '\0';
-	if (!*type) return;
-
-	/* Loop through the filetype array */
-	for (i = 0; i < st->filetype_count; i++) {
-
-		/* Old entry found? */
-		if (strcasecmp(st->filetype[i].suffix, suffix) == MATCH) {
-			st->filetype[i].type = *type;
-			return;
-		}
-	}
-
-	/* No old entry found - add new entry */
-	if (i < MAX_FILETYPES) {
-		sstrlcpy(st->filetype[i].suffix, suffix);
-		st->filetype[i].type = *type;
-		st->filetype_count++;
-	}
-}
-
-
-/*
- * Parse command-line arguments
- */
-void parse_args(state *st, int argc, char *argv[])
-{
-	FILE *fp;
-	static const char readme[] = README;
-	static const char license[] = LICENSE;
-	struct stat file;
-	char buf[BUFSIZE];
-	int opt;
-
-	/* Parse args */
-	while ((opt = getopt(argc, argv, "h:p:r:t:g:a:c:u:m:l:w:o:s:i:k:f:e:D:L:P:n:db?-")) != ERROR) {
-		switch(opt) {
-			case 'h': sstrlcpy(st->server_host, optarg); break;
-			case 'p': st->server_port = atoi(optarg); break;
-			case 'r': sstrlcpy(st->server_root, optarg); break;
-			case 't': st->default_filetype = *optarg; break;
-			case 'g': sstrlcpy(st->map_file, optarg); break;
-			case 'a': sstrlcpy(st->map_file, optarg); break;
-			case 'c': sstrlcpy(st->cgi_file, optarg); break;
-			case 'u': sstrlcpy(st->user_dir, optarg);  break;
-			case 'm': /* obsolete, replaced by -l */
-			case 'l': sstrlcpy(st->log_file, optarg);  break;
-
-			case 'w': st->out_width = atoi(optarg); break;
-			case 'o':
-				if (sstrncasecmp(optarg, "UTF-8") == MATCH) st->out_charset = UTF_8;
-				if (sstrncasecmp(optarg, "ISO-8859-1") == MATCH) st->out_charset = ISO_8859_1;
-				break;
-
-			case 's': st->session_timeout = atoi(optarg); break;
-			case 'i': st->session_max_kbytes = abs(atoi(optarg)); break;
-			case 'k': st->session_max_hits = abs(atoi(optarg)); break;
-
-			case 'f': sstrlcpy(st->filter_dir, optarg); break;
-			case 'e': add_ftype_mapping(st, optarg); break;
-
-			case 'D': sstrlcpy(st->server_description, optarg); break;
-			case 'P': sstrlcpy(st->gopher_proxy, optarg); break;
-
-			case 'n':
-				if (*optarg == 'v') { st->opt_vhost = FALSE; break; }
-				if (*optarg == 'l') { st->opt_parent = FALSE; break; }
-				if (*optarg == 'h') { st->opt_header = FALSE; break; }
-				if (*optarg == 'f') { st->opt_footer = FALSE; break; }
-				if (*optarg == 'd') { st->opt_date = FALSE; break; }
-				if (*optarg == 'c') { st->opt_magic = FALSE; break; }
-				if (*optarg == 'o') { st->opt_iconv = FALSE; break; }
-				if (*optarg == 'q') { st->opt_query = FALSE; break; }
-				if (*optarg == 's') { st->opt_syslog = FALSE; break; }
-				if (*optarg == 'a') { st->opt_caps = FALSE; break; }
-				if (*optarg == 'm') { st->opt_shm = FALSE; break; }
-				break;
-
-			case 'd': st->debug = TRUE; break;
-			case 'b': printf(license); exit(EXIT_SUCCESS);
-			default : printf(readme); exit(EXIT_SUCCESS);
-		}
-	}
-
-	/* Sanitize options */
-	if (st->out_width > MAX_WIDTH) st->out_width = MAX_WIDTH;
-	if (st->out_width < MIN_WIDTH) st->out_width = MIN_WIDTH;
-	if (st->out_width  < MIN_WIDTH + DATE_WIDTH) st->opt_date = FALSE;
-	if (!st->opt_syslog) st->debug = FALSE;
-
-	/* Primary vhost directory must exist or we disable vhosting */
-	if (st->opt_vhost) {
-		snprintf(buf, sizeof(buf), "%s/%s", st->server_root, st->server_host);
-		if (stat(buf, &file) == ERROR) {
-			st->opt_vhost = FALSE;
-			if (st->debug)
-				syslog(LOG_INFO, "disabling vhosting: %s must exist", buf);
-		}
-	}
-
-	/* If -D arg looks like a file load the file contents */
-	if (*st->server_description == '/') {
-
-		if ((fp = fopen(st->server_description , "r"))) {
-			fgets(st->server_description, sizeof(st->server_description), fp);
-			chomp(st->server_description);
-			fclose(fp);
-		}
-		else strclear(st->server_description);
 	}
 }
 
@@ -560,13 +466,6 @@ int main(int argc, char *argv[])
 	if (getuid() == 0)
 		die(&st, ERR_ACCESS, "Refusing to run as root");
 
-	/* Get server hostname */
-	if ((c = getenv("HOSTNAME"))) sstrlcpy(st.server_host, c);
-	else if ((gethostname(buf, sizeof(buf))) != ERROR) sstrlcpy(st.server_host, buf);
-
-	/* Get remote peer IP */
-	sstrlcpy(st.req_remote_addr, get_peer_address());
-
 	/* Handle command line arguments */
 	parse_args(&st, argc, argv);
 
@@ -596,10 +495,8 @@ int main(int argc, char *argv[])
 
 	/* For debugging shared memory issues */
 	if (!st.opt_shm) shm = NULL;
-#endif
 
 	/* Get server platform and description */
-#ifdef HAVE_SHMEM
 	if (shm) {
 		sstrlcpy(st.server_platform, shm->server_platform);
 
@@ -645,16 +542,14 @@ int main(int argc, char *argv[])
 	}
 #endif
 
-	/* Redirect HTTP requests to a gopher proxy */
-	if (sstrncmp(buf + 1, "GET ") == MATCH) {
-		if (st.debug) syslog(LOG_INFO, "got http request, redirecting to proxy");
-
-		printf("HTTP/1.0 301 Moved Permanently" CRLF);
-		printf("Location: %s%s:%i/" CRLF,
-			st.gopher_proxy,
+	/* Handle gopher+ root requests (UMN gopher client is seriously borken) */
+	if (sstrncmp(buf + 1, "\t$") == MATCH) {
+		printf("+-1" CRLF);
+		printf("+INFO: 1Main menu\t\t%s\t%i" CRLF,
 			st.server_host,
 			st.server_port);
-		printf("Server: " SERVER_SOFTWARE_FULL CRLF CRLF, st.server_platform);
+		printf("+VIEWS:" CRLF " application/gopher+-menu: <512b>" CRLF);
+		printf("." CRLF);
 		return OK;
 	}
 

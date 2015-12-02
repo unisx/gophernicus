@@ -1,5 +1,5 @@
 /*
- * Gophernicus - Copyright (c) 2009-2010 Kim Holviala <kim@holviala.com>
+ * Gophernicus - Copyright (c) 2009-2012 Kim Holviala <kim@holviala.com>
  * All rights reserved.
  * 
  * Redistribution and use in source and binary forms, with or without
@@ -157,7 +157,6 @@
 #define DEFAULT_TAG	"gophertag"
 #define DEFAULT_CGI	"/cgi-bin/"
 #define DEFAULT_USERDIR	"public_gopher"
-#define DEFAULT_PROXY	"http://gopherproxy.org/"
 #define DEFAULT_ADDR	"unknown"
 #define DEFAULT_WIDTH	70
 #define DEFAULT_CHARSET	US_ASCII
@@ -221,12 +220,19 @@
 #define MAX_FILETYPES	128	/* Maximum number of suffix to filetype mappings */
 #define MAX_FILTERS	16	/* Maximum number of file filters */
 #define MAX_SDIRENT	1024	/* Maximum number of files per directory to handle */
+#define MAX_REWRITE	32	/* Maximum number of selector rewrite options */
 
 /* Struct for file suffix -> gopher filetype mapping */
 typedef struct {
 	char suffix[15];
 	char type;
 } ftype;
+
+/* Struct for selector rewriting */
+typedef struct {
+	char match[BUFSIZE];
+	char replace[BUFSIZE];
+} srewrite;
 
 /* Struct for keeping the current options & state */
 typedef struct {
@@ -246,7 +252,9 @@ typedef struct {
 
 	/* Settings */
 	char server_description[64];
+	char server_location[64];
 	char server_platform[64];
+	char server_admin[64];
 	char server_root[256];
 	char server_host_default[64];
 	char server_host[64];
@@ -258,7 +266,6 @@ typedef struct {
 	char cgi_file[64];
 	char user_dir[64];
 	char log_file[256];
-	char gopher_proxy[128];
 
 	char hidden[MAX_HIDDEN][256];
 	int hidden_count;
@@ -266,6 +273,9 @@ typedef struct {
 	ftype filetype[MAX_FILETYPES];
 	int filetype_count;
 	char filter_dir[64];
+
+	srewrite rewrite[MAX_REWRITE];
+	int rewrite_count;
 
 	/* Session */
 	int session_timeout;
