@@ -1,3 +1,18 @@
+2012-06-12  Kim Holviala  <kim@holviala.com>
+
+	* Support for headerless HTTP/0.9
+	* Code cleanups
+	* Platform probing now knows about RedHat and Slackware
+	* lsb_release no longer gets called if it doesn't exist
+	  (bugreport from Jacob Dahl Pind)
+	* Changed menu errors from type "i" text to type "3"
+	  (bugreport from Damien Carol)
+	* Removed the special OSX Carbonized build
+	* Fixed a bug in menu.c: popen() needs pclose()
+	* Fixed a off-by-one in gopher_filetype()
+	* Changed the filetype of documents (doc/ps/pdf) to "d"
+
+
 2012-05-04  Kim Holviala  <kim@holviala.com>
 
 	* Released version 1.2 (finally...)

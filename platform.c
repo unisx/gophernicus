@@ -24,9 +24,6 @@
 
 
 #include "gophernicus.h"
-#ifdef __OSX_CARBON__
-#include "/Developer/Headers/FlatCarbon/Gestalt.h"
-#endif
 
 
 /*
@@ -35,21 +32,19 @@
 void platform(state *st)
 {
 #ifdef HAVE_UNAME
-#if defined(_AIX) || defined(__linux)
+#if defined(_AIX) || defined(__linux) || defined(__APPLE__)
 	FILE *fp;
 #endif
-#ifdef __linux
+#if defined(__linux) || defined(__APPLE__)
 	char buf[BUFSIZE];
 #endif
-#ifdef __OSX_CARBON__
-	SInt32 major;
-	SInt32 minor;
-	SInt32 hardware;
+#ifdef __linux
+	struct stat file;
 #endif
 	struct utsname name;
-	char sysname[32];
-	char release[32];
-	char machine[32];
+	char sysname[64];
+	char release[64];
+	char machine[64];
 	char *c;
 
 	/* Fetch system information */
@@ -80,26 +75,30 @@ void platform(state *st)
 	}
 #endif
 
-	/* Mac OS X Carbonized version (32bit only?) */
-#ifdef __OSX_CARBON__
+	/* Mac OS X, just like Unix but totally different... */
+#ifdef __APPLE__
 
-	/* Hardcode correct OS name (instead of "Darwin") */
+	/* Hardcode OS name */
 	sstrlcpy(sysname, "MacOSX");
 
-	/* Get offical OS X major.minor version */
-	if (Gestalt(gestaltSystemVersionMajor, &major) != OK) major = 0;
-	if (Gestalt(gestaltSystemVersionMinor, &minor) != OK) minor = 0;
-
-	snprintf(release, sizeof(release), "%i.%i",
-		(int) major, (int) minor);
+	/* Get OS X version */
+	if ((fp = popen("/usr/bin/sw_vers -productVersion", "r"))) {
+		fgets(release, sizeof(release), fp);
+		chomp(release);
+		pclose(fp);
+	}
 
 	/* Get hardware name */
 	if (!*st->server_description &&
-	    Gestalt(gestaltUserVisibleMachineName, &hardware) == OK) {
+	    (fp = popen("/usr/sbin/sysctl -n hw.model", "r"))) {
 
-		/* Clones are illegal now... */
+		/* Read hardware name */
+		fgets(buf, sizeof(buf), fp);
+		pclose(fp);
+
+		/* Clones are gone now so we'll hardcode the manufacturer */
 		sstrlcpy(st->server_description, "Apple ");
-		sstrlcat(st->server_description, (char *) hardware + 1);
+		sstrlcat(st->server_description, buf);
 
 		/* Remove hardware revision */
 		for (c = st->server_description; *c; c++)
@@ -123,17 +122,43 @@ void platform(state *st)
 		fclose(fp);
 	}
 
-	/* Identify Linux distribution using lsb_release */
-	if (!*sysname && (fp = popen("/usr/bin/lsb_release -i -s", "r"))) {
+	/* Identify RedHat */
+	if (!*sysname && (fp = fopen("/etc/redhat-release", "r"))) {
 		fgets(sysname, sizeof(sysname), fp);
-		chomp(sysname);
 		pclose(fp);
+
+		if ((c = strstr(sysname, "release "))) sstrlcpy(release, c + 8);
+		if ((c = strchr(release, ' '))) *c = '\0';
+
+		if ((c = strchr(sysname, ' '))) *c = '\0';
+		if (strcmp(sysname, "Red") == MATCH) sstrlcpy(sysname, "RedHat");
 	}
 
-	if (!*release && (fp = popen("/usr/bin/lsb_release -r -s", "r"))) {
-		fgets(release, sizeof(release), fp);
-		chomp(release);
+	/* Identify Slackware */
+	if (!*sysname && (fp = fopen("/etc/slackware-version", "r"))) {
+		fgets(sysname, sizeof(sysname), fp);
 		pclose(fp);
+
+		if ((c = strchr(sysname, ' '))) {
+			sstrlcpy(release, c + 1);
+			*c = '\0';
+		}
+	}
+
+	/* Identify Debian */
+	if (stat("/usr/bin/lsb_release", &file) == OK && (file.st_mode & S_IXOTH)) {
+
+		if (!*sysname && (fp = popen("/usr/bin/lsb_release -i -s", "r"))) {
+			fgets(sysname, sizeof(sysname), fp);
+			chomp(sysname);
+			pclose(fp);
+		}
+
+		if (!*release && (fp = popen("/usr/bin/lsb_release -r -s", "r"))) {
+			fgets(release, sizeof(release), fp);
+			chomp(release);
+			pclose(fp);
+		}
 	}
 #endif
 

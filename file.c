@@ -296,7 +296,12 @@ void setenv_cgi(state *st, char *script)
 	setenv("SERVER_DESCRIPTION", st->server_description, 1);
 	snprintf(buf, sizeof(buf), SERVER_SOFTWARE "/" VERSION);
 	setenv("SERVER_VERSION", buf, 1);
-	setenv("SERVER_PROTOCOL", SERVER_PROTOCOL, 1);
+
+	if (st->req_protocol == PROTO_HTTP)
+		setenv("SERVER_PROTOCOL", "HTTP/0.9", 1);
+	else
+		setenv("SERVER_PROTOCOL", "RFC1436", 1);
+
 	setenv("SERVER_NAME", st->server_host, 1);
 	snprintf(buf, sizeof(buf), "%i", st->server_port);
 	setenv("SERVER_PORT", buf, 1);

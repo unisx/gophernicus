@@ -195,7 +195,7 @@ void vhostlist(state *st)
 /*
  * Return gopher filetype for a file
  */
-char gopher_filetype(state *st, char *file)
+char gopher_filetype(state *st, char *file, char magic)
 {
 	FILE *fp;
 	char buf[BUFSIZE];
@@ -217,11 +217,11 @@ char gopher_filetype(state *st, char *file)
 	}
 
 	/* Are we allowed to look inside files? */
-	if (!st->opt_magic) return st->default_filetype;
+	if (!magic) return st->default_filetype;
 
 	/* Read data from the file */
 	if ((fp = fopen(file , "r")) == NULL) return st->default_filetype;
-	i = fread(buf, 1, sizeof(buf), fp);
+	i = fread(buf, 1, sizeof(buf) - 1, fp);
 	buf[i] = '\0';
 	fclose(fp);
 
@@ -239,6 +239,9 @@ char gopher_filetype(state *st, char *file)
 	if (strstr(buf, "\nFrom: ") &&
 	    strstr(buf, "\nSubject: ")) return TYPE_MIME;
 
+	/* MIME */
+	if (strstr(buf, "\nContent-Type: ")) return TYPE_MIME;
+
 	/* HTML files */
 	if (buf[0] == '<' &&
 	    (strstr(buf, "<html") ||
@@ -246,7 +249,7 @@ char gopher_filetype(state *st, char *file)
 
 	/* PDF and PostScript */
 	if (sstrncmp(buf, "%PDF-") == MATCH ||
-	    sstrncmp(buf, "%!") == MATCH) return TYPE_PDF;
+	    sstrncmp(buf, "%!") == MATCH) return TYPE_DOC;
 
 	/* compress and gzip */
 	if (sstrncmp(buf, "\037\235\220") == MATCH ||
@@ -298,16 +301,12 @@ int gophermap(state *st, char *mapfile, int depth)
 		setenv_cgi(st, mapfile);
 		if ((fp = popen(mapfile , "r")) == NULL) return OK;
 	}
-	else {
-#else
-	{
+	else
 #endif
 		if ((fp = fopen(mapfile , "r")) == NULL) return OK;
-	}
 
 	/* Read lines one by one */
 	while (fgets(line, sizeof(line) - 1, fp)) {
-
 		/* Parse type & name */
 		chomp(line);
 		type = line[0];
@@ -410,7 +409,12 @@ int gophermap(state *st, char *mapfile, int depth)
 	}
 
 	/* Clean up & return */
-	fclose(fp);
+#ifdef HAVE_POPEN
+	if (exe) pclose(fp);
+	else
+#endif
+		fclose(fp);
+
 	return QUIT;
 }
 
@@ -483,7 +487,7 @@ void gopher_menu(state *st)
 				if ((c = strchr(displayname, '/')) == NULL) break;
 
 				if (!*++c) break;
-				strlcpy(displayname, c, sizeof(displayname));
+				sstrlcpy(displayname, c);
 			}
 
 			/* Output menu title */
@@ -620,7 +624,7 @@ void gopher_menu(state *st)
 		if ((dir[i].mode & S_IFMT) != S_IFREG) continue;
 
 		/* Get file type */
-		type = gopher_filetype(st, pathname);
+		type = gopher_filetype(st, pathname, st->opt_magic);
 
 		/* File listing with dates & sizes */
 		if (st->opt_date) {

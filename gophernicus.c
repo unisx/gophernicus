@@ -126,10 +126,7 @@ void die(state *st, char *message, char *description)
 
 	/* Handle menu errors */
 	if (st->req_filetype == TYPE_MENU || st->req_filetype == TYPE_QUERY) {
-#ifdef ENABLE_STRICT_RFC1436
 		printf("3" ERROR_PREFIX "%s\tTITLE\t" DUMMY_HOST CRLF, message);
-#endif
-		printf("i" ERROR_PREFIX "%s\tTITLE\t" DUMMY_HOST CRLF, message);
 		footer(st);
 	}
 
@@ -370,6 +367,7 @@ void init_state(state *st)
 	sstrlcpy(st->req_remote_addr, get_peer_address());
 	/* strclear(st->req_remote_host); */
 	st->req_filetype = DEFAULT_TYPE;
+	st->req_protocol = PROTO_GOPHER;
 	st->req_filesize = 0;
 
 	/* Output */
@@ -442,10 +440,10 @@ int main(int argc, char *argv[])
 	struct stat file;
 	state st;
 	char self[64];
+	char selector[BUFSIZE];
 	char buf[BUFSIZE];
 	char *dest;
 	char *c;
-	int i;
 #ifdef HAVE_SHMEM
 	struct shmid_ds shm_ds;
 	shm_state *shm;
@@ -511,39 +509,24 @@ int main(int argc, char *argv[])
 	if (st.opt_syslog) openlog(self, LOG_PID, LOG_DAEMON);
 
 	/* Read selector, remove CRLF & encodings */
-	buf[0] = '/';
-	if (fgets(buf + 1, sizeof(buf) - 2, stdin) == NULL) buf[1] = '\0';
+	if (fgets(selector, sizeof(selector) - 1, stdin) == NULL)
+		selector[0] = '\0';
 
-	chomp(buf);
-	strndecode(buf, buf, sizeof(buf));	/* Do decoding in-place :) */
+	chomp(selector);
+	strndecode(selector, selector, sizeof(selector));
 
-	if (st.debug) syslog(LOG_INFO, "client sent us \"%s\"", buf + 1);
+	if (st.debug) syslog(LOG_INFO, "client sent us \"%s\"", selector);
 
 	/* Handle hURL: redirect page */
-	if (sstrncmp(buf + 1, "URL:") == MATCH) {
+	if (sstrncmp(selector, "URL:") == MATCH) {
 		st.req_filetype = TYPE_HTML;
-		sstrlcpy(st.req_selector, buf + 1);
+		sstrlcpy(st.req_selector, selector);
 		url_redirect(&st);
 		return OK;
 	}
 
-	/* Handle HTTP /server-status requests */
-#ifdef HAVE_SHMEM
-	if (sstrncmp(buf + 1, "GET " SERVER_STATUS) == MATCH) {
-		printf("HTTP/1.0 200 OK" CRLF);
-		printf("Content-Type: text/plain" CRLF);
-		printf("Server: " SERVER_SOFTWARE_FULL CRLF CRLF, st.server_platform);
-
-		/* Make logging accurate */
-		sstrlcpy(st.req_selector, SERVER_STATUS);
-
-		if (shm) server_status(&st, shm, shmid);
-		return OK;
-	}
-#endif
-
 	/* Handle gopher+ root requests (UMN gopher client is seriously borken) */
-	if (sstrncmp(buf + 1, "\t$") == MATCH) {
+	if (sstrncmp(selector, "\t$") == MATCH) {
 		printf("+-1" CRLF);
 		printf("+INFO: 1Main menu\t\t%s\t%i" CRLF,
 			st.server_host,
@@ -551,6 +534,18 @@ int main(int argc, char *argv[])
 		printf("+VIEWS:" CRLF " application/gopher+-menu: <512b>" CRLF);
 		printf("." CRLF);
 		return OK;
+	}
+
+	/* Convert HTTP request to gopher (respond using headerless HTTP/0.9) */
+	if (sstrncmp(selector, "GET ") == MATCH ||
+	    sstrncmp(selector, "POST ") == MATCH ) {
+
+		if ((c = strchr(selector, ' '))) sstrlcpy(selector, c + 1);
+		if ((c = strchr(selector, ' '))) *c = '\0';
+
+		st.req_protocol = PROTO_HTTP;
+
+		if (st.debug) syslog(LOG_INFO, "got HTTP request for \"%s\"", selector);
 	}
 
 	/* Save default server_host & fetch session data (including new server_host) */
@@ -561,8 +556,9 @@ int main(int argc, char *argv[])
 
 	/* Loop through the selector, fix it & separate query_string */
 	dest = st.req_selector;
+	if (selector[0] != '/') *dest++ = '/';
 
-	for (c = buf; *c;) {
+	for (c = selector; *c;) {
 
 		/* Skip duplicate slashes and /./ */
 		while (*c == '/' && *(c + 1) == '/') c++;
@@ -605,10 +601,7 @@ int main(int argc, char *argv[])
 	if ((c = strchr(st.server_host, '\t'))) *c = '\0';
 
 	/* Guess request filetype so we can die() with style... */
-	i = st.opt_magic;
-	st.opt_magic = FALSE;	/* Don't stat() now */
-	st.req_filetype = gopher_filetype(&st, st.req_selector);
-	st.opt_magic = i;
+	st.req_filetype = gopher_filetype(&st, st.req_selector, FALSE);
 
 	/* Convert seletor to path & stat() */
 	selector_to_path(&st);
@@ -640,7 +633,7 @@ int main(int argc, char *argv[])
 
 	/* Not a dir - let's guess the filetype again... */
 	else if ((file.st_mode & S_IFMT) == S_IFREG)
-		st.req_filetype = gopher_filetype(&st, st.req_realpath);
+		st.req_filetype = gopher_filetype(&st, st.req_realpath, st.opt_magic);
 
 	/* Menu selectors must end with a slash */
 	if (st.req_filetype == TYPE_MENU && strlast(st.req_selector) != '/')

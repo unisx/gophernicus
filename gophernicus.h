@@ -133,8 +133,12 @@
 #define TYPE_INFO	'i'
 #define TYPE_IMAGE	'I'
 #define TYPE_MIME	'M'
-#define TYPE_PDF	'p'
+#define TYPE_DOC	'd'
 #define TYPE_TITLE	'!'
+
+/* Protocols */
+#define PROTO_GOPHER	'g'
+#define PROTO_HTTP	'h'
 
 /* Charsets */
 #define AUTO		0
@@ -149,7 +153,6 @@
 #define HTTP_USERAGENT	"Unknown gopher client"
 
 /* Defaults for settings */
-#define DEFAULT_ROOT	"/var/gopher"
 #define DEFAULT_HOST	"localhost"
 #define DEFAULT_PORT	70
 #define DEFAULT_TYPE	TYPE_TEXT
@@ -186,10 +189,10 @@
 #define ERROR_HOST	"error.host\t1"
 #define ERROR_PREFIX	"Error: "
 
-/* String formats */
+/* Strings */
 #define SERVER_SOFTWARE	"Gophernicus"
-#define SERVER_PROTOCOL	"RFC1436"
 #define SERVER_SOFTWARE_FULL SERVER_SOFTWARE "/" VERSION " (%s)"
+
 #define HEADER_FORMAT	"[%s]"
 #define FOOTER_FORMAT	"Gophered by Gophernicus/" VERSION " on %s"
 
@@ -244,6 +247,7 @@ typedef struct {
 	char req_referrer[BUFSIZE];
 	char req_remote_addr[64];
 	char req_filetype;
+	char req_protocol;
 	off_t req_filesize;
 
 	/* Output */
@@ -347,17 +351,16 @@ typedef struct {
 	"hqx","4", \
 	"Z","5","gz","5","tgz","5","tar","5","zip","5","bz2","5","rar","5","sea","5", \
 	"q","7","qry","7", \
-	"iso","9","so","9","o","9","rtf","9","xls","9","doc","9","ppt","9", \
-	"xlsx","9","docx","9","pptx","9","ttf","9","bin","9", \
+	"iso","9","so","9","o","9","rtf","9","ttf","9","bin","9", \
 	"ics","c","ical","c", \
 	"gif","g", \
 	"html","h","htm","h","xhtml","h","css","h","swf","h","rdf","h","rss","h","xml","h", \
 	"jpg","I","jpeg","I","png","I","bmp","I","svg","I","tif","I","tiff","I", \
 	"ico","I","xbm","I","xpm","I","pcx","I", \
 	"mbox","M", \
-	"pdf","p","ps","p", \
+	"pdf","d","ps","d","doc","d","ppt","d","xls","d","xlsx","d","docx","d","pptx","d", \
 	"mp3","s","wav","s","mid","s","wma","s","flac","s","ogg","s","aiff","s","aac","s", \
-	"avi",";","mp4",";","mpg",";","mov",";","qt",";","asf",";","mpv",";", \
+	"avi",";","mp4",";","mpg",";","mov",";","qt",";","asf",";","mpv",";","m4v",";", \
 	NULL, NULL
 
 /*

@@ -20,7 +20,7 @@ int foldersort(const void *a, const void *b);
 int sortdir(char *path, sdirent *list, int max);
 void userlist(state *st);
 void vhostlist(state *st);
-char gopher_filetype(state *st, char *file);
+char gopher_filetype(state *st, char *file, char magic);
 int gophermap(state *st, char *mapfile, int depth);
 void gopher_menu(state *st);
 void strrepeat(char *dest, char c, size_t num);

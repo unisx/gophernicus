@@ -143,8 +143,8 @@ void parse_args(state *st, int argc, char *argv[])
 				break;
 
 			case 'd': st->debug = TRUE; break;
-			case 'b': printf(license); exit(EXIT_SUCCESS);
-			default : printf(readme); exit(EXIT_SUCCESS);
+			case 'b': puts(license); exit(EXIT_SUCCESS);
+			default : puts(readme); exit(EXIT_SUCCESS);
 		}
 	}
 

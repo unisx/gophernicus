@@ -1,7 +1,6 @@
 Things I might work on:
 
 	* Fix vhost part of README
-	* HTTP gateway
 	* Support for config files
 	* Standalone pre-forked (threaded?) version
 	* Password-protected resources

@@ -16,7 +16,7 @@ $ sudo make install
 
 Then add the below line to your /etc/inetd.conf and restart
 inetd. If your system comes with something else than standard
-inetd make install should have done the right thing already.
+inetd "make install" should have done the right thing already.
 
 gopher  stream  tcp  nowait  nobody  /usr/sbin/in.gophernicus  in.gophernicus -h <hostname>
 
@@ -48,13 +48,6 @@ Work(tm).
 Compiling on Mac OS X
 =====================
 
-By default Gophernicus compiles a 32-bit Carbon version of the
-server daemon and advertises itself as running on "MacOSX" with
-the OS version and platform looking like the offical Apple ones.
-If you want to compile the generic Unix version run
-"make generic" and you'll end up with a Darwin version instead
-(which could also be 64-bit).
-
 When you run "make install" on OSX-like system with launchd
 the install routine also installs a plist file and tells launchd
 to start the server up. In other words, It Just Works(tm).
@@ -85,7 +78,7 @@ Porting to different platforms
 If you need to port Gophernicus to a new platform, please take
 a look at gophernicus.h which has a bunch of HAVE_* #defines.
 Fiddling with those usually makes it possible to compile a working
-server. And if you succeed in compiling Gophernicus to a new
+server. If you succeed in compiling Gophernicus to a new
 platform please send the patches to kim@holviala.com so I can 
 include them into the next release.
 
@@ -95,10 +88,11 @@ Tested (and semi-supported) platforms include:
  +-------------+-------------+-------------+
   AIX 5.1       POWER3        gcc 4.0.0
   AIX 6.1       POWER4        gcc 4.2.0
-  CentOS 5.5    x86_64        gcc 4.1.2
-  Debian Linux  x86_64        gcc 4.4.5
+  CentOS 5.5    amd64         gcc 4.1.2
+  Debian Linux  amd64         gcc 4.4.5
   Debian Linux  armv5tel      gcc 4.3.2
   MacOSX 10.5   i386          gcc 4.0.1
+  MacOSX 10.7   x86_64        llvm-gcc 4.2.1
   NetBSD 5.0    amd64         gcc 4.1.3
 
 

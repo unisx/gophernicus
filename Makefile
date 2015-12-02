@@ -8,7 +8,7 @@
 NAME    = gophernicus
 PACKAGE = $(NAME)
 BINARY  = in.$(NAME)
-VERSION = 1.2
+VERSION = 1.3
 
 SOURCES = $(NAME).c file.c menu.c string.c platform.c session.c options.c
 HEADERS = functions.h files.h
@@ -43,14 +43,11 @@ LDFLAGS =
 #
 all:
 	@case `uname` in \
-		Darwin)  $(MAKE) ROOT="$(OSXROOT)" osx; ;; \
+		Darwin)  $(MAKE) ROOT="$(OSXROOT)" $(BINARY); ;; \
 		*)       $(MAKE) $(BINARY); ;; \
 	esac
 
 generic: $(BINARY)
-
-osx:
-	@$(MAKE) EXTRA_CFLAGS="-D__OSX_CARBON__" EXTRA_LDFLAGS="-framework carbon" $(BINARY)
 
 deb:
 	dpkg-buildpackage -rfakeroot -uc -us
@@ -75,7 +72,7 @@ $(BINARY): $(OBJECTS)
 	$(CC) $(LDFLAGS) $(EXTRA_LDFLAGS) $(OBJECTS) -o $@
 
 .c.o:
-	$(CC) -c $(CFLAGS) $(EXTRA_CFLAGS) -DVERSION="\"$(VERSION)\"" $< -o $@
+	$(CC) -c $(CFLAGS) $(EXTRA_CFLAGS) -DVERSION="\"$(VERSION)\"" -DDEFAULT_ROOT="\"$(ROOT)\"" $< -o $@
 
 
 headers: $(HEADERS)
@@ -197,6 +194,9 @@ uninstall-launchd:
 	if [ -f $(LAUNCHD)/$(PLIST) ]; then \
 		launchctl unload $(LAUNCHD)/$(PLIST); \
 		rm -f $(LAUNCHD)/$(PLIST); \
+	fi
+	if [ -L $(ROOT) ]; then \
+		rm -f $(ROOT); \
 	fi
 	@echo
 

@@ -1,4 +1,4 @@
-!Sample gophermap for Gohphernicus
+!Sample gophermap for Gophernicus
 
 ##
 ## This is a sample gophermap.
@@ -50,9 +50,11 @@ Valid filetypes include:
    h   HTML file
    i   info text
    I   generic image file (other than GIF)
-   p   PDF/PS file
+   d   document file (ps, pdf, doc etc)
    s   sound file
    ;   video file
+   c   calendar file
+   M   MIME file (mbox, emails etc)
 
 Additional type characters supported by Gophernicus:
    #          comment - rest of the line is ignored
