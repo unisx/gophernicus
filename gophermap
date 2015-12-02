@@ -20,13 +20,13 @@ directory and replace this page.
 Generic information:
 =echo "    current time...: `date`"
 =echo "    your ip address: $REMOTE_ADDR"
-=echo "    server uptime..: `uptime | sed -e \"s/^.*up //\" -e \"s/,.*//\" -e \"s/^ *//\"`"
+=echo "    server uptime..: `uptime | sed 's/.*up \([^,]*\), .*/\1/' `"
 =echo "    server version.: $SERVER_VERSION"
 =echo "    server platform: $SERVER_ARCH"
 =echo "    description....: $SERVER_DESCRIPTION"
 
 Server configuration:
-=echo "    config file....: `for FILE in /Library/LaunchDaemons/org.gophernicus.server.plist /etc/xinetd.d/gopher /etc/inetd.conf; do if [ -f $FILE ]; then echo $FILE; break; fi; done`"
+=echo "    config file....: `for FILE in /Library/LaunchDaemons/org.gophernicus.server.plist /boot/common/settings/network/services /etc/xinetd.d/gophernicus /etc/inetd.conf; do if [ -f $FILE ]; then echo $FILE; break; fi; done`"
 =echo "    server hostname: $SERVER_HOST"
 =echo "    root directory.: $DOCUMENT_ROOT"
 =echo "    running as user: `whoami`"

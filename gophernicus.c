@@ -27,18 +27,6 @@
 
 
 /*
- * Return bigger of two integers
- *
- * Hmmm... Why is this a function and not a #define? *wondering*
- */
-inline int max(int a, int b)
-{
-	if (a > b) return a;
-	return b;
-}
-
-
-/*
  * Print gopher menu line
  */
 void info(state *st, char *str, char type)
@@ -305,6 +293,47 @@ void selector_to_path(state *st)
 
 
 /*
+ * Get local IP address
+ */
+char *get_local_address(void)
+{
+#ifdef HAVE_IPv4
+	struct sockaddr_in addr;
+	socklen_t addrsize = sizeof(addr);
+#endif
+#ifdef HAVE_IPv6
+	struct sockaddr_in6 addr6;
+	socklen_t addr6size = sizeof(addr6);
+	static char address[INET6_ADDRSTRLEN];
+#endif
+	char *c;
+
+	/* Try IPv4 first */
+#ifdef HAVE_IPv4
+	if (getsockname(0, (struct sockaddr *) &addr, &addrsize) == OK) {
+		c = inet_ntoa(addr.sin_addr);
+		if (strlen(c) > 0 && *c != '0') return c;
+	}
+#endif
+
+	/* IPv4 didn't work - try IPv6 */
+#ifdef HAVE_IPv6
+	if (getsockname(0, (struct sockaddr *) &addr6, &addr6size) == OK) {
+		if (inet_ntop(AF_INET6, &addr6.sin6_addr, address, sizeof(address))) {
+
+			/* Strip ::ffff: IPv4-in-IPv6 prefix */
+			if (sstrncmp(address, "::ffff:") == MATCH) return (address + 7);
+			else return address;
+		}
+	}
+#endif
+
+	/* Nothing works... I'm out of ideas */
+	return DEFAULT_ADDR;
+}
+
+
+/*
  * Get remote peer IP address
  */
 char *get_peer_address(void)
@@ -364,6 +393,7 @@ void init_state(state *st)
 	strclear(st->req_realpath);
 	strclear(st->req_query_string);
 	strclear(st->req_referrer);
+	sstrlcpy(st->req_local_addr, get_local_address());
 	sstrlcpy(st->req_remote_addr, get_peer_address());
 	/* strclear(st->req_remote_host); */
 	st->req_filetype = DEFAULT_TYPE;
@@ -419,6 +449,7 @@ void init_state(state *st)
 	st->opt_query = TRUE;
 	st->opt_caps = TRUE;
 	st->opt_shm = TRUE;
+	st->opt_root = TRUE;
 	st->debug = FALSE;
 
 	/* Load default suffix -> filetype mappings */
@@ -460,12 +491,23 @@ int main(int argc, char *argv[])
 #endif
 	init_state(&st);
 
-	/* Refuse to run as root */
-	if (getuid() == 0)
-		die(&st, ERR_ACCESS, "Refusing to run as root");
-
 	/* Handle command line arguments */
 	parse_args(&st, argc, argv);
+
+	/* Open syslog() */
+	if (st.opt_syslog) openlog(self, LOG_PID, LOG_DAEMON);
+
+	/* Make sure the computer is turned on */
+#ifdef __HAIKU__
+	if (is_computer_on() != TRUE)
+		die(&st, ERR_ACCESS, "Please turn on the computer first");
+#endif
+
+	/* Refuse to run as root */
+#ifdef HAVE_PASSWD
+	if (st.opt_root && getuid() == 0)
+		die(&st, ERR_ACCESS, "Refusing to run as root");
+#endif
 
 	/* Try to get shared memory */
 #ifdef HAVE_SHMEM
@@ -505,9 +547,6 @@ int main(int argc, char *argv[])
 #endif
 		platform(&st);
 
-	/* Open syslog() */
-	if (st.opt_syslog) openlog(self, LOG_PID, LOG_DAEMON);
-
 	/* Read selector, remove CRLF & encodings */
 	if (fgets(selector, sizeof(selector) - 1, stdin) == NULL)
 		selector[0] = '\0';
@@ -533,6 +572,8 @@ int main(int argc, char *argv[])
 			st.server_port);
 		printf("+VIEWS:" CRLF " application/gopher+-menu: <512b>" CRLF);
 		printf("." CRLF);
+
+		if (st.debug) syslog(LOG_INFO, "got a request for gopher+ root menu");
 		return OK;
 	}
 
@@ -611,7 +652,11 @@ int main(int argc, char *argv[])
 
 		/* Handle virtual /caps.txt requests */
 		if (st.opt_caps && sstrncmp(st.req_selector, CAPS_TXT) == MATCH) {
+#ifdef HAVE_SHMEM
 			caps_txt(&st, shm);
+#else
+			caps_txt(&st, NULL);
+#endif
 			return OK;
 		}
 

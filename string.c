@@ -88,11 +88,11 @@ char *strkey(char *header, char *key)
 
 	if (strncasecmp(header, key, len) == MATCH) {
 		c = header + len;
-		while (*++c == ' ');
+		do { c++; } while (*c == ' ' || *c == '\t');
 
 		if (*c != ':') return NULL;
 
-		while (*++c == ' ');
+		do { c++; } while (*c == ' ' || *c == '\t');
 		return c;
 	}
 
@@ -105,9 +105,9 @@ char *strkey(char *header, char *key)
  */
 char strlast(char *str)
 {
-	size_t len;
+	int len;
 
-	if ((len = strlen(str) - 1) >= 0) return str[len];
+	if ((len = (int)strlen(str) - 1) >= 0) return str[len];
 	else return 0;
 }
 
@@ -253,7 +253,7 @@ void strnencode(char *out, const char *in, size_t outsize)
 			if (outsize < 5) break;
 
 			/* Output encoded char */
-			sprintf(out, "#%.3o", c);
+			snprintf(out, outsize, "#%.3o", c);
 			out += 4;
 		}
 

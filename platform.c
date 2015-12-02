@@ -35,7 +35,7 @@ void platform(state *st)
 #if defined(_AIX) || defined(__linux) || defined(__APPLE__)
 	FILE *fp;
 #endif
-#if defined(__linux) || defined(__APPLE__)
+#if defined(__arm__) || defined(__mips__) || defined(__APPLE__)
 	char buf[BUFSIZE];
 #endif
 #ifdef __linux
@@ -60,7 +60,17 @@ void platform(state *st)
 	/* Fix uname() results */
 	sstrlcpy(machine, "powerpc");
 	snprintf(release, sizeof(release), "%s.%s",
-		name.version, name.release);
+		name.version,
+		name.release);
+
+	/* Get CPU type */
+	if ((fp = popen("/usr/sbin/getsystype -i", "r"))) {
+		fgets(machine, sizeof(machine), fp);
+		pclose(fp);
+
+		strreplace(machine, ' ', '_');
+		chomp(machine);
+	}
 
 	/* Get hardware name using shell uname */
 	if (!*st->server_description &&
@@ -109,11 +119,16 @@ void platform(state *st)
 	/* Linux uname() just says Linux/2.6 - let's dig deeper... */
 #ifdef __linux
 
-	/* Most Linux ARM boards have hardware name in /proc/cpuinfo */
+	/* Most Linux ARM/MIPS boards have hardware name in /proc/cpuinfo */
+#if defined(__arm__) || defined(__mips__)
 	if (!*st->server_description && (fp = fopen("/proc/cpuinfo" , "r"))) {
 
 		while (fgets(buf, sizeof(buf), fp)) {
+#ifdef __arm__
 			if ((c = strkey(buf, "Hardware"))) {
+#else
+			if ((c = strkey(buf, "machine"))) {
+#endif
 				sstrlcpy(st->server_description, c);
 				chomp(st->server_description);
 				break;
@@ -121,11 +136,12 @@ void platform(state *st)
 		}
 		fclose(fp);
 	}
+#endif
 
 	/* Identify RedHat */
 	if (!*sysname && (fp = fopen("/etc/redhat-release", "r"))) {
 		fgets(sysname, sizeof(sysname), fp);
-		pclose(fp);
+		fclose(fp);
 
 		if ((c = strstr(sysname, "release "))) sstrlcpy(release, c + 8);
 		if ((c = strchr(release, ' '))) *c = '\0';
@@ -137,7 +153,7 @@ void platform(state *st)
 	/* Identify Slackware */
 	if (!*sysname && (fp = fopen("/etc/slackware-version", "r"))) {
 		fgets(sysname, sizeof(sysname), fp);
-		pclose(fp);
+		fclose(fp);
 
 		if ((c = strchr(sysname, ' '))) {
 			sstrlcpy(release, c + 1);
@@ -145,7 +161,7 @@ void platform(state *st)
 		}
 	}
 
-	/* Identify Debian */
+	/* Uh-oh.... how about a standard Linux with lsb_release? */
 	if (stat("/usr/bin/lsb_release", &file) == OK && (file.st_mode & S_IXOTH)) {
 
 		if (!*sysname && (fp = popen("/usr/bin/lsb_release -i -s", "r"))) {
@@ -160,6 +176,32 @@ void platform(state *st)
 			pclose(fp);
 		}
 	}
+
+	/* OK, nothing worked - let's try /etc/issue for sysname */
+	if (!*sysname && (fp = fopen("/etc/issue", "r"))) {
+		fgets(sysname, sizeof(sysname), fp);
+		fclose(fp);
+
+		if ((c = strchr(sysname, ' '))) *c = '\0';
+		if ((c = strchr(sysname, '\\'))) *c = '\0';
+		chomp(sysname);
+	}
+
+	/* Debian version should be in /etc/debian_version */
+	if (!*release && (fp = fopen("/etc/debian_version", "r"))) {
+		fgets (release, sizeof(release), fp);
+		fclose(fp);
+
+		if ((c = strchr(release, '/'))) *c = '\0';
+		chomp(release);
+	}
+#endif
+
+	/* Haiku OS */
+#ifdef __HAIKU__
+
+	/* Fix release name */
+	snprintf(release, sizeof(release), "R%s", name.release);
 #endif
 
 	/* Fill in the blanks using uname() data */
@@ -174,9 +216,14 @@ void platform(state *st)
 
 	/* Create a nicely formatted platform string */
 	snprintf(st->server_platform, sizeof(st->server_platform), "%s/%s %s",
-		sysname,
-		release,
-		machine);
+	         sysname,
+#if defined(__OpenBSD__) || defined(__FreeBSD__) || defined(__NetBSD__)
+	         machine,
+	         release);
+#else
+	         release,
+	         machine);
+#endif 
 
 	/* Debug */
 	if (st->debug) {

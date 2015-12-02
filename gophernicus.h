@@ -51,9 +51,27 @@
 
 /* Linux */
 #ifdef __linux
-#undef PASSWD_MIN_UID
+#undef  PASSWD_MIN_UID
 #define PASSWD_MIN_UID 500
 #define HAVE_SENDFILE
+#endif
+
+/* Embedded Linux with uClibc */
+#ifdef __UCLIBC__
+lskdjf
+#undef HAVE_SHMEM
+#undef HAVE_PASSWD
+#endif
+
+/* Haiku */
+#ifdef __HAIKU__
+#undef HAVE_SHMEM
+#undef HAVE_PASSWD
+#endif
+
+/* OpenBSD */
+#ifdef __OpenBSD__
+#define HAVE_STRLCPY
 #endif
 
 /* Add other OS-specific defines here */
@@ -176,7 +194,11 @@
 #define DUMMY_HOST	"null.host\t1"
 
 /* Safe $PATH for exec() */
+#ifdef __HAIKU__
+#define SAFE_PATH	"/boot/common/bin:/bin"
+#else
 #define SAFE_PATH	"/usr/bin:/bin"
+#endif
 
 /* Special requests */
 #define SERVER_STATUS	"/server-status"
@@ -245,6 +267,7 @@ typedef struct {
 	char req_realpath[BUFSIZE];
 	char req_query_string[BUFSIZE];
 	char req_referrer[BUFSIZE];
+	char req_local_addr[64];
 	char req_remote_addr[64];
 	char req_filetype;
 	char req_protocol;
@@ -298,6 +321,7 @@ typedef struct {
 	char opt_query;
 	char opt_caps;
 	char opt_shm;
+	char opt_root;
 	char debug;
 } state;
 
@@ -372,7 +396,8 @@ typedef struct {
 #define sstrncmp(s1, s2) strncmp(s1, s2, sizeof(s2) - 1)
 #define sstrncasecmp(s1, s2) strncasecmp(s1, s2, sizeof(s2) - 1)
 #define sstrniconv(charset, out, in) strniconv(charset, out, in, sizeof(out))
-
+#define max(a,b) (((a) > (b)) ? (a) : (b))
+#define min(a,b) (((a) < (b)) ? (a) : (b))
 
 /*
  * Include generated headers

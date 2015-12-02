@@ -309,6 +309,7 @@ void setenv_cgi(state *st, char *script)
 	setenv("DOCUMENT_ROOT", st->server_root, 1);
 	setenv("SCRIPT_NAME", st->req_selector, 1);
 	setenv("SCRIPT_FILENAME", script, 1);
+	setenv("LOCAL_ADDR", st->req_local_addr, 1);
 	setenv("REMOTE_ADDR", st->req_remote_addr, 1);
 	setenv("HTTP_REFERER", st->req_referrer, 1);
 	setenv("HTTP_ACCEPT_CHARSET", strcharset(st->out_charset), 1);

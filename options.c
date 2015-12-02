@@ -140,6 +140,7 @@ void parse_args(state *st, int argc, char *argv[])
 				if (*optarg == 's') { st->opt_syslog = FALSE; break; }
 				if (*optarg == 'a') { st->opt_caps = FALSE; break; }
 				if (*optarg == 'm') { st->opt_shm = FALSE; break; }
+				if (*optarg == 'r') { st->opt_root = FALSE; break; }
 				break;
 
 			case 'd': st->debug = TRUE; break;
@@ -151,17 +152,13 @@ void parse_args(state *st, int argc, char *argv[])
 	/* Sanitize options */
 	if (st->out_width > MAX_WIDTH) st->out_width = MAX_WIDTH;
 	if (st->out_width < MIN_WIDTH) st->out_width = MIN_WIDTH;
-	if (st->out_width  < MIN_WIDTH + DATE_WIDTH) st->opt_date = FALSE;
+	if (st->out_width < MIN_WIDTH + DATE_WIDTH) st->opt_date = FALSE;
 	if (!st->opt_syslog) st->debug = FALSE;
 
 	/* Primary vhost directory must exist or we disable vhosting */
 	if (st->opt_vhost) {
 		snprintf(buf, sizeof(buf), "%s/%s", st->server_root, st->server_host);
-		if (stat(buf, &file) == ERROR) {
-			st->opt_vhost = FALSE;
-			if (st->debug)
-				syslog(LOG_INFO, "disabling vhosting: %s must exist", buf);
-		}
+		if (stat(buf, &file) == ERROR) st->opt_vhost = FALSE;
 	}
 
 	/* If -D arg looks like a file load the file contents */

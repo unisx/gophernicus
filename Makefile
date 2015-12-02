@@ -8,32 +8,35 @@
 NAME    = gophernicus
 PACKAGE = $(NAME)
 BINARY  = in.$(NAME)
-VERSION = 1.3
+VERSION = 1.4
 
 SOURCES = $(NAME).c file.c menu.c string.c platform.c session.c options.c
 HEADERS = functions.h files.h
 OBJECTS = $(SOURCES:.c=.o)
 DOCS    = LICENSE README INSTALL TODO ChangeLog README.Gophermap gophertag
 
-INSTALL = PATH=$$PATH:/usr/sbin ./install-sh -o root -g 0
+INSTALL = PATH=$$PATH:/usr/sbin ./install-sh -o 0 -g 0
 DESTDIR = /usr
 SBINDIR = $(DESTDIR)/sbin
 DOCDIR  = $(DESTDIR)/share/doc/$(PACKAGE)
 
 ROOT    = /var/gopher
 OSXROOT = /Library/GopherServer
+WRTROOT = /gopher
 MAP     = gophermap
 
 INETD   = /etc/inetd.conf
 XINETD  = /etc/xinetd.d
 LAUNCHD = /Library/LaunchDaemons
 PLIST   = org.gophernicus.server.plist
+NET_SRV = /boot/common/settings/network/services
 
 DIST    = $(PACKAGE)-$(VERSION)
 TGZ     = $(DIST).tar.gz
 RELDIR  = /var/gopher/gophernicus.org/software/gophernicus/server/
 
 CC      = gcc
+HOSTCC	= $(CC)
 CFLAGS  = -O2 -Wall
 LDFLAGS = 
 
@@ -44,23 +47,18 @@ LDFLAGS =
 all:
 	@case `uname` in \
 		Darwin)  $(MAKE) ROOT="$(OSXROOT)" $(BINARY); ;; \
+		Haiku)   $(MAKE) EXTRA_LDFLAGS="-lnetwork" $(BINARY); ;; \
 		*)       $(MAKE) $(BINARY); ;; \
 	esac
 
 generic: $(BINARY)
 
+
+#
+# Special targets
+#
 deb:
 	dpkg-buildpackage -rfakeroot -uc -us
-
-install:
-	@case `uname` in \
-		Darwin)  $(MAKE) ROOT="$(OSXROOT)" install-files install-docs install-root install-osx install-done; ;; \
-		*)       $(MAKE) install-files install-docs install-root; ;; \
-	esac
-	if [ -d "$(XINETD)" ]; then $(MAKE) install-xinetd install-done; fi
-	if [ -f "$(INETD)" ]; then $(MAKE) install-inetd; fi
-
-.PHONY: install
 
 
 #
@@ -85,7 +83,7 @@ functions.h:
 	@echo
 
 bin2c: bin2c.c
-	$(CC) bin2c.c -o $@
+	$(HOSTCC) bin2c.c -o $@
 	@echo
 
 files.h: bin2c
@@ -111,6 +109,18 @@ clean-deb:
 #
 # Install targets
 #
+install:
+	@case `uname` in \
+		Darwin)  $(MAKE) ROOT="$(OSXROOT)" install-files install-docs install-root install-osx install-done; ;; \
+		Haiku)   $(MAKE) SBINDIR=/boot/common/bin DOCDIR=/boot/common/share/doc/$(PACKAGE) \
+		                 install-files install-docs install-root install-haiku install-done; ;; \
+		*)       $(MAKE) install-files install-docs install-root; ;; \
+	esac
+	@if [ -d "$(XINETD)" ]; then $(MAKE) install-xinetd install-done; fi
+	@if [ -f "$(INETD)" ]; then $(MAKE) install-inetd; fi
+
+.PHONY: install
+
 install-done:
 	@echo
 	@echo "======================================================================"
@@ -156,7 +166,7 @@ install-inetd:
 	@echo
 
 install-xinetd:
-	if [ -d "$(XINETD)" -a ! -f "$(XINETD)/gopher" ]; then \
+	if [ -d "$(XINETD)" -a ! -f "$(XINETD)/$(NAME)" ]; then \
 		sed -e "s/@HOSTNAME@/`hostname`/g" $(NAME).xinetd > $(XINETD)/$(NAME); \
 		[ -x /sbin/service ] && /sbin/service xinetd reload; \
 	fi
@@ -173,6 +183,22 @@ install-osx:
 	chmod -h 0775 $(ROOT) $(ROOT)/docs
 	@echo
 
+install-haiku:
+	if [ -f "$(NET_SRV)" -a ! "`grep -m1 gopher $(NET_SRV)`" ]; then \
+		(echo ""; \
+		echo "service gopher {"; \
+		echo "	family inet"; \
+		echo "	protocol tcp"; \
+		echo "	port 70"; \
+		echo "	launch in.gophernicus -h `hostname`"; \
+		echo "}") >> $(NET_SRV); \
+	fi
+	@echo
+	chown user:root $(DOCDIR)/* $(SBINDIR)/$(BINARY) $(ROOT)/$(MAP)
+	@echo
+	ps | grep net_server | grep -v grep | awk '{ print $$2 }' | xargs kill
+	nohup /boot/system/servers/net_server >/dev/null 2>/dev/null &
+	@echo
 
 #
 # Uninstall targets

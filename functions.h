@@ -1,11 +1,11 @@
 /* Automatically generated function definitions */
 
-inline int max(int a, int b);
 void info(state *st, char *str, char type);
 void footer(state *st);
 void die(state *st, char *message, char *description);
 void log_combined(state *st, int status);
 void selector_to_path(state *st);
+char *get_local_address(void);
 char *get_peer_address(void);
 void init_state(state *st);
 void send_binary_file(state *st);
