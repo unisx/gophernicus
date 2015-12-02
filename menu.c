@@ -1,5 +1,5 @@
 /*
- * Gophernicus - Copyright (c) 2009-2014 Kim Holviala <kim@holviala.com>
+ * Gophernicus - Copyright (c) 2009-2015 Kim Holviala <kim@holviala.com>
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -269,6 +269,9 @@ int gophermap(state *st, char *mapfile, int depth)
 	FILE *fp;
 	struct stat file;
 	char line[BUFSIZE];
+#ifdef HAVE_POPEN
+	char buf[BUFSIZE];
+#endif
 	char *selector;
 	char *name;
 	char *host;
@@ -299,11 +302,13 @@ int gophermap(state *st, char *mapfile, int depth)
 #ifdef HAVE_POPEN
 	if (exe) {
 		setenv_cgi(st, mapfile);
-		if ((fp = popen(mapfile , "r")) == NULL) return OK;
+		snprintf(buf, sizeof(buf), "'%s'", mapfile);
+
+		if ((fp = popen(buf, "r")) == NULL) return OK;
 	}
 	else
 #endif
-		if ((fp = fopen(mapfile , "r")) == NULL) return OK;
+		if ((fp = fopen(mapfile, "r")) == NULL) return OK;
 
 	/* Read lines one by one */
 	while (fgets(line, sizeof(line) - 1, fp)) {
