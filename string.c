@@ -25,6 +25,65 @@
 
 #include "gophernicus.h"
 
+/*
+ * Repeat a character num times and zero-terminate
+ */
+void strrepeat(char *dest, char c, size_t num)
+{
+	memset(dest, c, num);
+	dest[num] = '\0';
+}
+
+
+/*
+ * Cut string to width, return resulting width (UTF-8 aware)
+ */
+int strcut(char *str, size_t width)
+{
+	unsigned char c;
+	int w = 0;
+	int i;
+
+	while (width-- && (c = *str++)) {
+		if (c >= 0x80 && (*str & 0xc0) == 0x80) {
+			i = 0;
+
+			if ((c & 0xf8) == 0xf0) i = 3;
+			else if ((c & 0xf0) == 0xe0) i = 2;
+			else if ((c & 0xe0) == 0xc0) i = 1;
+
+			while (i--) if (!*str++) break;
+		}
+
+		w++;
+	}
+
+	*str = '\0';
+	return w;
+}
+
+
+/*
+ * Match header line and return value (Key: Value)
+ */
+char *strheader(char *header, char *key)
+{
+	char *c;
+	size_t len;
+
+	if ((len = strlen(key)) == 0) return NULL;
+
+	if (strncasecmp(header, key, len) == MATCH) {
+		c = header + len;
+		if (*c != ':') return NULL;
+
+		while (*++c == ' ');
+		return c;
+	}
+
+	return NULL;
+}
+
 
 /*
  * Return last character of a string
@@ -51,11 +110,11 @@ void chomp(char *str)
 
 
 /*
- * Convert UTF-8/Latin-1 string to 7bit ASCII
+ * Convert a string between UTF-8, ISO-8859-1 and US-ASCII
  */
-void strntoascii(char *out, char *in, size_t outsize)
+void strniconv(char *charset, char *out, char *in, size_t outsize)
 {
-	char latin2ascii[] = LATIN1_ASCII;
+	char ascii[] = ASCII;
 	unsigned long c;
 	size_t len;
 	int i;
@@ -69,52 +128,76 @@ void strntoascii(char *out, char *in, size_t outsize)
 		len--;
 
 		/* 7-bit chars are the same in all three charsets */
-		if (!(c & 0x80)) {
-			*out++ = c;
+		if (c < 0x80) {
+			*out++ = (unsigned char) c;
 			continue;
 		}
 
-		/* We'll assume Latin-1 which requres 0 extra bytes */
+		/* Assume ISO-8859-1 which requires 0 extra bytes */
 		i = 0;
 
-		/* UTF-8? */
+		/* UTF-8? (We'll actually check the next char here, not current) */
 		if ((*in & 0xc0) == 0x80) {
 
 			/* Four-byte UTF-8? */
-			if ((c & 0xf8) == 0xf0 && len >= 3) {
-				c = c & 0x07;
-				i = 3;
-			}
+			if ((c & 0xf8) == 0xf0 && len >= 3) { c &= 0x07; i = 3; }
 
 			/* Three-byte UTF-8? */
-			else if ((c & 0xf0) == 0xe0 && len >= 2) {
-				c = c & 0x0f;
-				i = 2;
-			}
+			else if ((c & 0xf0) == 0xe0 && len >= 2) { c &= 0x0f; i = 2; }
 
 			/* Two-byte UTF-8? */
-			else if ((c & 0xe0) == 0xc0 && len >= 1) {
-				c = c & 0x1f;
-				i = 1;
-			}
+			else if ((c & 0xe0) == 0xc0 && len >= 1) { c &= 0x1f; i = 1; }
 
 			/* Parse rest of the UTF-8 bytes */
 			while (i--) {
 				c <<= 6;
-				c += *in++ & 0x3f;
+				c |= *in++ & 0x3f;
 				len--;
 			}
 		}
 
-		/* Convert Latin-1 (and UTF-8) to ASCII */
-		if (c >= LATIN1_START && c <= LATIN1_END)
-			c = latin2ascii[c - LATIN1_START];
+		/*
+		 * At this point we've got one 32bit UTF character in c and
+		 * we're ready to convert it to the specified output charset
+		 */
+
+		/* Handle UTF-8 */
+		if (strncasecmp(charset, "UTF-8", 5) == MATCH) {
+			i = 0;
+
+			/* Two-byte encoding? */
+			if (c < 0x800 && outsize > 2) { *out++ = (c >> 6) | 0xc0; i = 1; }
+
+			/* Three-byte encoding? */
+			else if (c < 0x10000 && outsize > 3) { *out++ = (c >> 12) | 0xe0; i = 2; }
+
+			/* Four-byte encoding? */
+			else if (c < 0x110000 && outsize > 4) { *out++ = (c >> 18) | 0xf0; i = 3; }
+
+			/* Encode rest of the UTF-8 bytes */
+			while (i--) {
+				*out++ = ((c >> (i * 6)) & 0x3f) | 0x80;
+				outsize--;
+			}
+			continue;
+		}
+
+		/* Handle ISO-8859-1 */
+		if (strncasecmp(charset, "ISO-8859-1", 10) == MATCH ||
+		    strncasecmp(charset, "Latin-1", 7) == MATCH) {
+
+			if (c >= 0xa0 && c <= 0xff)
+				*out++ = (unsigned char) c;
+			else
+				*out++ = UNKNOWN;
+			continue;
+		}
+
+		/* Handle all other charsets as 7-bit US-ASCII */
+		if (c >= 0x80 && c <= 0xff)
+			*out++ = ascii[c - 0x80];
 		else
-			c = '?';
-
-		/* Output converted char */
-		*out++ = (unsigned char) c;
-
+			*out++ = UNKNOWN;
 	}
 
 	/* Zero-terminate output */
@@ -199,7 +282,7 @@ void strndecode(char *out, char *in, size_t outsize)
  */
 void strfsize(char *out, off_t size, size_t outsize)
 {
-	static char *unit[] = { "KB", "MB", "GB", "TB", "PB", NULL };
+	static char *unit[] = { UNITS };
 	int u;
 	float s;
 

@@ -22,7 +22,8 @@ echo "/* Automatically generated from $SRC */"
 echo
 echo "#define $NAME { \\"
 
-hexdump -v -e '16/1 "0x%02x, "' -e '" \\\n"' "$SRC"
+hexdump -v -e '16/1 "0x%02x, "' -e '" \\\n"' "$SRC" | \
+	sed -e "s/0x  .*//"
 
 echo "}"
 

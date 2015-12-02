@@ -1,7 +1,7 @@
 NAME    = gophernicus
 PACKAGE = $(NAME)-server
 BINARY  = in.$(NAME)
-VERSION = 0.4
+VERSION = 0.5
 
 SOURCES = $(NAME).c file.c menu.c string.c platform.c session.c
 HEADERS = functions.h readme.h license.h error_gif.h
@@ -9,12 +9,12 @@ OBJECTS = $(SOURCES:.c=.o)
 DOCS    = LICENSE README TODO ChangeLog GOPHERMAP
 
 DESTDIR = /usr
-BINDIR  = $(DESTDIR)/bin
 SBINDIR = $(DESTDIR)/sbin
 DOCDIR  = $(DESTDIR)/share/doc/$(PACKAGE)
 
 DIST    = $(PACKAGE)-$(VERSION)
 TGZ     = $(DIST).tar.gz
+RELDIR  = /var/gopher/gophernicus.org/software/gophernicus/server/
 
 CC      = gcc
 CFLAGS  = -O2 -Wall -DVERSION="\"$(VERSION)\"" -DBINARY="\"$(BINARY)\""
@@ -58,6 +58,9 @@ dist: realclean $(HEADERS)
 	tar -cf - ./ | (cd /tmp/$(DIST) && tar -xf -)
 	(cd /tmp/ && tar -cvf - $(DIST)) | gzip > $(TGZ)
 	rm -rf /tmp/$(DIST)
+
+release: dist
+	cp $(TGZ) $(RELDIR)
 
 install: $(BINARY)
 	strip $(BINARY)

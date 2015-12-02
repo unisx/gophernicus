@@ -29,24 +29,25 @@
 /*
  * Return OS name & platform
  */
-char *platform(void)
+char *platform()
 {
 #ifdef HAVE_UNAME
+	struct utsname name;
 	static char buf[BUFSIZE];
 	char *c;
-	struct utsname name;
 
 	/* Fetch system name */
 	uname(&name);
 
-#ifdef __linux
-	/* Linux kernel version fix */
+	/* We're only interested in marjor.minor */
 	if ((c = strchr(name.release, '.')) != NULL)
 		if ((c = strchr(c + 1, '.')) != NULL) *c = '\0';
-#endif
+
+	/* We don't want -VERSION */
+	if ((c = strchr(name.release, '-')) != NULL) *c = '\0';
 
 	/* Create a nicely formatted platform string */
-	snprintf(buf, sizeof(buf), "%s/%s (%s)",
+	snprintf(buf, sizeof(buf), "%s %s %s",
 		name.sysname,
 		name.release,
 		name.machine);

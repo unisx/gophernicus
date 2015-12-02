@@ -27,7 +27,15 @@
 
 
 /*
- * Platform detection & features
+ * Features
+ */
+
+#define ENABLE_GOPHERPLUSPLUS	/* Include gopher++ support */
+//#define ENABLE_STRICT_RFC1436	/* Follow RFC1436 to the letter */
+
+
+/*
+ * Platform configuration
  */
 
 /* Defaults should fit standard POSIX systems */
@@ -41,7 +49,6 @@
 #undef  HAVE_STRLCPY		/* strlcpy() from OpenBSD */
 #undef  HAVE_SENDFILE		/* sendfile() in Linux & others */
 
-
 /* Linux */
 #ifdef __linux
 #undef PASSWD_MIN_UID
@@ -52,7 +59,6 @@
 #if ! __GLIBC_PREREQ(2,8)
 #define HAVE_BROKEN_SCANDIR	/* scandir() weirdness */
 #endif
-
 #endif
 
 
@@ -72,6 +78,7 @@
 #include <errno.h>
 #include <pwd.h>
 #include <limits.h>
+#include <libgen.h>
 
 #ifdef HAVE_SENDFILE
 #include <sys/sendfile.h>
@@ -116,18 +123,24 @@
 #define OK		0
 #define ERROR		-1
 
-#define FOUND		0
+#define MATCH		0
 
 /* Protocol names */
-#define PROTO_GOPHER		"GOPHER/0"
+#define PROTO_GOPHER0		"GOPHER/0"
 #define PROTO_GOPHERPLUS	"GOPHER/+"
+#define PROTO_GOPHERPLUSPLUS	"GOPHER/++"
 
 /* Gopher filetypes */
 #define TYPE_TEXT	'0'
 #define TYPE_MENU	'1'
+#define TYPE_ERROR	'3'
+#define TYPE_QUERY	'7'
 #define TYPE_BINARY	'9'
 #define TYPE_GIF	'g'
+#define TYPE_INFO	'i'
 #define TYPE_IMAGE	'I'
+#define TYPE_TITLE	'!'
+#define TYPE_STAT	'S'
 
 /* Defaults for settings */
 #define DEFAULT_ROOT	"/var/gopher"
@@ -139,14 +152,14 @@
 #define DEFAULT_USERDIR	"public_gopher"
 #define DEFAULT_ADDR	"unknown"
 #define DEFAULT_WIDTH	70
-#define DEFAULT_CTYPE	"US-ASCII"
-#define MIN_WIDTH	40
+#define DEFAULT_CHARSET	"US-ASCII"
+#define MIN_WIDTH	33
 #define MAX_WIDTH	200
 
 /* Session defaults */
 #define DEFAULT_SESSION_TIMEOUT		1800
-#define DEFAULT_SESSION_MAX_KBYTES	1048576
-#define DEFAULT_SESSION_MAX_HITS	1024
+#define DEFAULT_SESSION_MAX_KBYTES	4194304
+#define DEFAULT_SESSION_MAX_HITS	4096
 
 /* Dummy values for gopher protocol */
 #define DUMMY_SELECTOR	"null"
@@ -170,21 +183,26 @@
 #define MAX_HIDDEN	32	/* Maximum number of hidden files */
 
 /* String formats */
-#define SERVER_SOFTWARE	"Gophernicus/" VERSION
-#define FOOTER_FORMAT	"Gophered by " SERVER_SOFTWARE " on %s"
+#define SERVER_SOFTWARE	"Gophernicus/" VERSION " Server (%s)"
+#define HEADER_FORMAT	"[%s]"
+#define FOOTER_FORMAT	"Gophered by " SERVER_SOFTWARE
+
+#define UNITS		"KB", "MB", "GB", "TB", "PB", NULL
 #define DATE_FORMAT	"%Y-%b-%d %H:%M"	/* See man 3 strftime */
 #define DATE_WIDTH	17
 #define DATE_LOCALE 	"POSIX"
+
 #define USERDIR_FORMAT	"~%s", pwd->pw_name	/* See man 3 getpwent */
 #define VHOST_FORMAT	"gopher://%s/"
 
+
 /* File suffix to gopher filetype mappings */
 #define FILETYPES \
-	"0", ".txt.sh.c.cpp.h.log.conf.", \
+	"0", ".txt.pl.py.sh.tcl.c.cpp.h.log.conf.php.php3.", \
 	"1", ".map.menu.", \
 	"5", ".gz.tgz.tar.zip.bz2.rar.", \
 	"7", ".q.qry.", \
-	"9", ".iso.so.o.xls.doc.ppt.ttf.bin.", \
+	"9", ".iso.so.o.xls.doc.ppt.xlsx.docx.pptx.ttf.bin.", \
 	"c", ".ics.ical.", \
 	"g", ".gif.", \
 	"h", ".html.htm.xhtml.css.swf.rdf.rss.xml.", \
@@ -195,11 +213,8 @@
 	"v", ".avi.mp4.mpg.mov.qt.asf.mpv.", \
 	NULL, NULL
 
-/* Latin-1 to US-ASCII look-alike conversion table */
-#define LATIN1_START 128
-#define LATIN1_END 255
-
-#define LATIN1_ASCII \
+/* ISO-8859-1 to US-ASCII look-alike conversion table */
+#define ASCII \
 	"E?,f..++^%S<??Z?" \
 	"?''\"\"*--~?s>??zY" \
 	" !c_*Y|$\"C?<?-R-" \
@@ -209,6 +224,7 @@
 	"aaaaaaaceeeeiiii" \
 	"dnooooo/ouuuuyty"
 
+#define UNKNOWN		'?'
 
 /* Struct for keeping the current options & state */
 typedef struct {
@@ -220,18 +236,19 @@ typedef struct {
 	char req_query_string[BUFSIZE];
 	char req_referrer[BUFSIZE];
 	char req_remote_addr[64];
-	/* char req_remote_host[256]; */
+	/* char req_remote_host[HOST_NAME_MAX]; */
+	char req_user_agent[128];
 	char req_filetype;
 	off_t req_filesize;
 
 	/* Output */
 	int  out_width;
-	char out_ctype[16];
+	char out_charset[16];
 
 	/* Settings */
 	char server_root[BUFSIZE];
-	char server_host_default[256];
-	char server_host[256];
+	char server_host_default[HOST_NAME_MAX];
+	char server_host[HOST_NAME_MAX];
 	int  server_port;
 
 	char default_filetype;
@@ -253,6 +270,7 @@ typedef struct {
 	char opt_date;
 	char opt_syslog;
 	char opt_magic;
+	char opt_iconv;
 	char opt_vhost;
 	char debug;
 } state;
@@ -260,7 +278,7 @@ typedef struct {
 /* Shared memory for session & accounting data */
 #ifdef HAVE_SHMEM
 
-#define SHM_KEY		0xbeeb0003	/* Unique identifier + struct version */
+#define SHM_KEY		0xbeeb0004	/* Unique identifier + struct version */
 #define SHM_MODE	0600		/* Access mode for the shared memory */
 #define SHM_SESSIONS	256		/* Max amount of user sessions to track */
 
@@ -275,13 +293,6 @@ typedef struct {
 
 	char server_host[64];
 	int  server_port;
-
-	int  out_width;
-	char out_ctype[16];
-
-	char opt_parent;
-	char opt_footer;
-	char opt_date;
 } shm_session;
 
 typedef struct {
@@ -297,9 +308,9 @@ typedef struct {
 /*
  * Useful macros
  */
-#define info(str) printf("i%s\t%s\t%s" CRLF, str, DUMMY_SELECTOR, DUMMY_HOST);
 #define strclear(str) str[0] = '\0';
 #define sstrlcpy(dest, src) strlcpy(dest, src, sizeof(dest))
+#define sstrlcat(dest, src) strlcat(dest, src, sizeof(dest))
 
 
 /*

@@ -40,7 +40,7 @@ int get_shm_session_id(state *st, shm_state *shm)
 
 	/* Locate user's old session using remote_addr */
 	for (i = 0; i < SHM_SESSIONS; i++) {
-		if (strcmp(st->req_remote_addr, shm->session[i].req_remote_addr) == FOUND &&
+		if (strcmp(st->req_remote_addr, shm->session[i].req_remote_addr) == MATCH &&
 		    (now - shm->session[i].req_atime) < st->session_timeout) break;
 	}
 
@@ -65,13 +65,6 @@ void get_shm_session(state *st, shm_state *shm)
 	/* Get session data */
 	sstrlcpy(st->server_host, shm->session[i].server_host);
 	st->server_port = shm->session[i].server_port;
-
-	st->out_width = shm->session[i].out_width;
-	sstrlcpy(st->out_ctype, shm->session[i].out_ctype);
-
-	st->opt_parent = shm->session[i].opt_parent;
-	st->opt_footer = shm->session[i].opt_footer;
-	st->opt_date = shm->session[i].opt_date;
 }
 #endif
 
@@ -83,6 +76,7 @@ void get_shm_session(state *st, shm_state *shm)
 void update_shm_session(state *st, shm_state *shm)
 {
 	time_t now;
+	char buf[BUFSIZE];
 	int delay;
 	int i;
 
@@ -110,7 +104,14 @@ void update_shm_session(state *st, shm_state *shm)
 	if (i == SHM_SESSIONS) return;
 
 	/* Get referrer from old session data */
-	sstrlcpy(st->req_referrer, shm->session[i].req_selector);
+	if (*shm->session[i].server_host) {
+		snprintf(buf, sizeof(buf), "gopher://%s:%i/%c%s",
+			shm->session[i].server_host,
+			shm->session[i].server_port,
+			shm->session[i].req_filetype,
+			shm->session[i].req_selector);
+		sstrlcpy(st->req_referrer, buf);
+	}
 
 	/* Update session data */
 	sstrlcpy(shm->session[i].server_host, st->server_host);
@@ -119,13 +120,6 @@ void update_shm_session(state *st, shm_state *shm)
 	sstrlcpy(shm->session[i].req_selector, st->req_selector);
 	shm->session[i].req_filetype = st->req_filetype;
 	shm->session[i].req_atime = now;
-
-	shm->session[i].out_width = st->out_width;
-	sstrlcpy(shm->session[i].out_ctype, st->out_ctype);
-
-	shm->session[i].opt_parent = st->opt_parent;
-	shm->session[i].opt_footer = st->opt_footer;
-	shm->session[i].opt_date = st->opt_date;
 
 	shm->session[i].hits++;
 	shm->session[i].kbytes += st->req_filesize / 1024;

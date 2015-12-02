@@ -27,17 +27,19 @@
 
 
 /*
- * Dump a file to standard output
+ * Send a binary file to the client
  */
-void dump_file(char *file, off_t size)
+void send_binary_file(state *st)
 {
 	/* Faster sendfile() version */
 #ifdef HAVE_SENDFILE
 	int fd;
 	off_t offset = 0;
 
-	if ((fd = open(file, O_RDONLY)) == ERROR) return;
-	sendfile(1, fd, &offset, size);
+	if (st->debug) syslog(LOG_INFO, "outputting binary file \"%s\"", st->req_realpath);
+
+	if ((fd = open(st->req_realpath, O_RDONLY)) == ERROR) return;
+	sendfile(1, fd, &offset, st->req_filesize);
 	close(fd);
 
 	/* More compatible POSIX fread()/fwrite() version */
@@ -46,11 +48,49 @@ void dump_file(char *file, off_t size)
 	char buf[BUFSIZE];
 	int bytes;
 
-	if ((fp = fopen(file , "r")) == NULL) return;
+	if (st->debug) syslog(LOG_INFO, "outputting binary file \"%s\"", st->req_realpath);
+
+	if ((fp = fopen(st->req_realpath , "r")) == NULL) return;
 	while ((bytes = fread(buf, 1, sizeof(buf), fp)) > 0)
 		fwrite(buf, bytes, 1, stdout);
 	fclose(fp);
 #endif
+}
+
+
+/*
+ * Send a text file to the client
+ */
+void send_text_file(state *st)
+{
+	FILE *fp;
+	char in[BUFSIZE];
+	char out[BUFSIZE];
+
+	if (st->debug) syslog(LOG_INFO, "outputting text file \"%s\"", st->req_realpath);
+	if ((fp = fopen(st->req_realpath , "r")) == NULL) return;
+
+	/* Loop through the file line by line */
+	while (fgets(in, sizeof(in), fp) != NULL) {
+
+		/* Covert to output charset & print */
+		if (st->opt_iconv) strniconv(st->out_charset, out, in, sizeof(out));
+		else sstrlcpy(out, in);
+
+		chomp(out);
+
+#ifdef ENABLE_STRICT_RFC1436
+		if (strcmp(out, ".") == MATCH) printf(".." CRLF);
+		else printf("%s" CRLF , out);
+#else
+		printf("%s" CRLF , out);
+#endif
+	}
+
+#ifdef ENABLE_STRICT_RFC1436
+	printf("." CRLF);
+#endif
+	fclose(fp);
 }
 
 
@@ -117,9 +157,7 @@ void server_status(state *st, shm_state *shm, int shmid)
 		"BytesPerReq: %li" CRLF
 		"BusyServers: %i" CRLF
 		"IdleServers: 0" CRLF
-		"CPULoad: %.2f" CRLF
-		"Server: %s" CRLF
-		"Platform: %s" CRLF,
+		"CPULoad: %.2f" CRLF,
 			shm->hits,
 			shm->kbytes,
 			(int) uptime,
@@ -127,8 +165,8 @@ void server_status(state *st, shm_state *shm, int shmid)
 			shm->kbytes * 1024 / (int) uptime,
 			shm->kbytes * 1024 / (shm->hits + 1),
 			(int) shm_ds.shm_nattch,
-			loadavg(),
-			SERVER_SOFTWARE, platform());
+			loadavg());
+	printf("Server: " SERVER_SOFTWARE CRLF, platform());
 
 	/* Print active sessions */
 	sessions = 0;
@@ -170,8 +208,13 @@ void runcgi(state *st, char *file)
 	setenv("GATEWAY_INTERFACE", "CGI/1.1", 1);
 	setenv("CONTENT_LENGTH", "0", 1);
 	setenv("QUERY_STRING", st->req_query_string, 1);
-	setenv("SERVER_SOFTWARE", SERVER_SOFTWARE, 1);
-	setenv("SERVER_PROTOCOL", "GOPHER/0", 1);
+	snprintf(buf, sizeof(buf), SERVER_SOFTWARE, platform());
+	setenv("SERVER_SOFTWARE", buf, 1);
+#ifdef ENABLE_GOPHERPLUSPLUS
+	setenv("SERVER_PROTOCOL", PROTO_GOPHERPLUSPLUS, 1);
+#else
+	setenv("SERVER_PROTOCOL", PROTO_GOPHER0, 1);
+#endif
 	setenv("SERVER_NAME", st->server_host, 1);
 	snprintf(buf, sizeof(buf), "%i", st->server_port);
 	setenv("SERVER_PORT", buf, 1);
@@ -180,22 +223,22 @@ void runcgi(state *st, char *file)
 	setenv("SCRIPT_NAME", st->req_selector, 1);
 	setenv("SCRIPT_FILENAME", file, 1);
 	setenv("REMOTE_ADDR", st->req_remote_addr, 1);
-	snprintf(buf, sizeof(buf), "gopher://%s:%i/%c%s",
-		st->server_host,
-		st->server_port,
-		st->req_filetype,
-		st->req_referrer);
-	setenv("HTTP_REFERER", buf, 1);
+	setenv("HTTP_REFERER", st->req_referrer, 1);
+	setenv("HTTP_USER_AGENT", st->req_user_agent, 1);
+	setenv("HTTP_ACCEPT_CHARSET", st->out_charset, 1);
 
-	/* gopherd extras */
-	setenv("SERVER_PLATFORM", platform(), 1);
+	/* Gophernicus extras */
 	setenv("REQUEST_PROTOCOL", st->req_protocol, 1);
 	snprintf(buf, sizeof(buf), "%c", st->req_filetype);
 	setenv("GOPHER_FILETYPE", buf, 1);
+	setenv("GOPHER_CHARSET", st->out_charset, 1);
 	setenv("GOPHER_REFERER", st->req_referrer, 1);
+	setenv("GOPHER_USER_AGENT", st->req_user_agent, 1);
+	snprintf(buf, sizeof(buf), "%i", st->out_width);
+	setenv("COLUMNS", buf, 1);
 
-	/* bucktooth extras */
-	if (strlen(st->req_query_string) > 0) {
+	/* Bucktooth extras */
+	if (*st->req_query_string) {
 		snprintf(buf, sizeof(buf), "%s?%s",
 			st->req_selector, st->req_query_string);
 		setenv("SELECTOR", buf, 1);
@@ -224,8 +267,8 @@ void gopher_file(state *st)
 	if (strstr(st->req_realpath, st->cgi_file))
 		runcgi(st, st->req_realpath);
 
-	/* Handle regular files */
-	if (st->debug) syslog(LOG_INFO, "outputting file \"%s\"", st->req_realpath);
-	dump_file(st->req_realpath, st->req_filesize);
+	/* Output regular files */
+	if (st->req_filetype == TYPE_TEXT) send_text_file(st);
+	else send_binary_file(st);
 }
 

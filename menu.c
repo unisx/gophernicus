@@ -90,6 +90,7 @@ void userlist(state *st)
 }
 #endif
 
+
 /*
  * Print a list of available virtual hosts
  */
@@ -159,25 +160,25 @@ void vhostlist(state *st)
 char gopher_filetype(state *st, char *file)
 {
 	FILE *fp;
-	static char *filetypes[] = { FILETYPES };
-	char suffixdot[20];
+	static const char *filetypes[] = { FILETYPES };
+	char suffix[20];
 	char line[BUFSIZE];
-	char *suffix;
+	char *c;
 	int i;
 
-	/* If it ends with an slash it's a dir */
-	if ((i = strlen(file)) == 0) return st->default_filetype;
-	if (file[i - 1] == '/') return '1';
+	/* If it ends with an slash it's a menu */
+	if (!*file) return st->default_filetype;
+	if (strlast(file) == '/') return TYPE_MENU;
 
 	/* Get file suffix */
-	if ((suffix = strrchr(file, '.'))) {
+	if ((c = strrchr(file, '.'))) {
 
 		/* Add a dot to suffix for easier searching (.txt -> .txt.) */
-		snprintf(suffixdot, sizeof(suffixdot), "%s.", suffix);
+		snprintf(suffix, sizeof(suffix), "%s.", c);
 
 		/* Loop through the filetype array looking for the suffix */
 		for (i = 0; filetypes[i]; i += 2)
-			if (strstr(filetypes[i + 1], suffixdot)) return *filetypes[i];
+			if (strstr(filetypes[i + 1], suffix)) return *filetypes[i];
 	}
 
 	/* Are we allowed to look inside files? */
@@ -248,9 +249,17 @@ int gophermap(state *st, char *file)
 			continue;
 		}
 
+		/* gopher++ title */
+#ifdef ENABLE_GOPHERPLUSPLUS
+		if (type == TYPE_TITLE) {
+			info(st, name, TYPE_TITLE);
+			continue;
+		}
+#endif
+
 		/* Print out non-resources as info text */
 		if (!strchr(line, '\t')) {
-			info(line);
+			info(st, line, TYPE_INFO);
 			continue;
 		}
 
@@ -276,7 +285,7 @@ int gophermap(state *st, char *file)
 		}
 
 		/* Handle absolute and hURL gopher resources */
-		if (selector[0] == '/' || strncmp(selector, "URL:", 4) == FOUND) {
+		if (selector[0] == '/' || strncmp(selector, "URL:", 4) == MATCH) {
 			printf("%c%s\t%s\t%s\t%i" CRLF, type, name,
 				selector, host, port);
 		}
@@ -309,6 +318,7 @@ void gopher_menu(state *st)
 	char timestr[20];
 	char sizestr[20];
 	char *parent;
+	char *c;
 	char type;
 	int width;
 	int num;
@@ -329,6 +339,30 @@ void gopher_menu(state *st)
 		}
 	}
 
+	/* No gophermap found - print header */
+#ifdef ENABLE_GOPHERPLUSPLUS
+	else {
+		/* Convert selector to output charset */
+		if (st->opt_iconv)
+			strniconv(st->out_charset, displayname, st->req_selector, sizeof(displayname));
+		else
+			sstrlcpy(displayname, st->req_selector);
+
+		/* Shorten too long selectors */
+		while (strlen(displayname) > (st->out_width - sizeof(HEADER_FORMAT))) {
+			if ((c = strchr(displayname, '/')) == NULL) break;
+
+			if (!*++c) break;
+			strlcpy(displayname, c, sizeof(displayname));
+		}
+
+		/* Output menu index */
+		snprintf(buf, sizeof(buf), HEADER_FORMAT, displayname);
+		info(st, buf, TYPE_TITLE);
+		info(st, EMPTY, TYPE_INFO);
+	}
+#endif
+
 	/* Scan the directory */
 #ifdef HAVE_BROKEN_SCANDIR
 	num = scandir(st->req_realpath, &dir, NULL, (int (*)(const void *, const void *)) foldersort);
@@ -343,10 +377,10 @@ void gopher_menu(state *st)
 		parent = dirname(buf);
 
 		/* Root has no parent */
-		if (strcmp(st->req_selector, ROOT) != FOUND) {
+		if (strcmp(st->req_selector, ROOT) != MATCH) {
 
 			/* Prevent double-slash */
-			if (strcmp(parent, ROOT) == FOUND) parent++;
+			if (strcmp(parent, ROOT) == MATCH) parent++;
 
 			/* Print link */
 			printf("1%-*s\t%s/\t%s\t%i" CRLF,
@@ -367,14 +401,18 @@ void gopher_menu(state *st)
 
 		/* Skip dotfiles and gophermaps */
 		if (dir[i]->d_name[0] == '.') goto next;
-		if (strcmp(dir[i]->d_name, st->map_file) == FOUND) goto next;
+		if (strcmp(dir[i]->d_name, st->map_file) == MATCH) goto next;
 
 		/* Skip files marked for hiding */
 		for (n = 0; n < st->hidden_count; n++)
-			if (strcmp(dir[i]->d_name, st->hidden[n]) == FOUND) goto next;
+			if (strcmp(dir[i]->d_name, st->hidden[n]) == MATCH) goto next;
 
 		/* Convert filename to 7bit ASCII & encoded versions */
-		strntoascii(displayname, dir[i]->d_name, sizeof(displayname));
+		if (st->opt_iconv)
+			strniconv(st->out_charset, displayname, dir[i]->d_name, sizeof(displayname));
+		else
+			sstrlcpy(displayname, dir[i]->d_name);
+
 		strnencode(encodedname, dir[i]->d_name, sizeof(encodedname));
 
 		/* Skip non-world readable files */
@@ -395,14 +433,19 @@ void gopher_menu(state *st)
 				ltime = localtime(&file.st_mtime);
 				strftime(timestr, sizeof(timestr), DATE_FORMAT, ltime);
 
-				printf("1%-*.*s   %s        -  \t%s%s/\t%s\t%i" CRLF,
-					width, width, displayname, timestr, st->req_selector,
+				/* Hack to get around UTF-8 byte != char */
+				n = width - strcut(displayname, width);
+				strrepeat(buf, ' ', n);
+
+				printf("1%s%s   %s        -  \t%s%s/\t%s\t%i" CRLF,
+					displayname, buf, timestr, st->req_selector,
 					encodedname, st->server_host, st->server_port);
 			}
 
 			/* Regular dir listing */
 			else {
-				printf("1%.*s\t%s%s/\t%s\t%i" CRLF, st->out_width,
+				strcut(displayname, st->out_width);
+				printf("1%s\t%s%s/\t%s\t%i" CRLF,
 					displayname, st->req_selector, encodedname,
 					st->server_host, st->server_port);
 			}
@@ -419,14 +462,19 @@ void gopher_menu(state *st)
 			strftime(timestr, sizeof(timestr), DATE_FORMAT, ltime);
 			strfsize(sizestr, file.st_size, sizeof(sizestr));
 
-			printf("%c%-*.*s   %s %s\t%s%s\t%s\t%i" CRLF, type,
-				width, width, displayname, timestr, sizestr,
+			/* Hack to get around UTF-8 byte != char */
+			n = width - strcut(displayname, width);
+			strrepeat(buf, ' ', n);
+
+			printf("%c%s%s   %s %s\t%s%s\t%s\t%i" CRLF, type,
+				displayname, buf, timestr, sizestr,
 				st->req_selector, encodedname, st->server_host, st->server_port);
 		}
 
 		/* Regular file listing */
 		else {
-			printf("%c%.*s\t%s%s\t%s\t%i" CRLF, type, st->out_width,
+			strcut(displayname, st->out_width);
+			printf("%c%s\t%s%s\t%s\t%i" CRLF, type,
 				displayname, st->req_selector, encodedname,
 				st->server_host, st->server_port);
 		}

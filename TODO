@@ -3,6 +3,8 @@ Things I should work on:
 	* README needs work...
 	* Automated feature testing script (perl?)
 	* Script handlers: .php -> /usr/bin/php5-cgi
+	* Configurable filetypes
+	* main() should be shorter
 
 
 Things I might work on:

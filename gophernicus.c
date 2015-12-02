@@ -39,24 +39,48 @@ inline int max(int a, int b)
 
 
 /*
+ * Print gopher menu line
+ */
+void info(state *st, char *str, char type)
+{
+	char buf[BUFSIZE];
+	char selector[16];
+
+	/* Convert string to output charset */
+	if (st->opt_iconv) strniconv(st->out_charset, buf, str, sizeof(buf));
+	else sstrlcpy(buf, str);
+
+	/* Handle gopher++ titles */
+	strclear(selector);
+	if (type == TYPE_TITLE) {
+		sstrlcpy(selector, "TITLE");
+		type = TYPE_INFO;
+	}
+
+	/* Output info line */
+	strcut(buf, st->out_width);
+	printf("%c%s\t%s\t%s" CRLF,
+		type, buf, selector, DUMMY_HOST);
+}
+
+
+/*
  * Print menu footer
  */
 void footer(state *st)
 {
 	char buf[BUFSIZE];
 
-	/* Check the footer option first */
 	if (!st->opt_footer) return;
 
 	/* Create horizontal line */
-	memset(buf, '_', st->out_width);
-	buf[(st->out_width - 1)] = '\0';
+	strrepeat(buf, '_', st->out_width);
 
 	/* Menu footer? */
-	if (st->req_filetype == TYPE_MENU) {
-		info(buf);
+	if (st->req_filetype == TYPE_MENU || st->req_filetype == TYPE_QUERY) {
+		info(st, buf, TYPE_INFO);
 		snprintf(buf, sizeof(buf), FOOTER_FORMAT, platform());
-		info(buf);
+		info(st, buf, TYPE_INFO);
 		printf("." CRLF);
 	}
 
@@ -82,14 +106,13 @@ void die(state *st, char *message)
 	}
 
 	/* Handle menu errors */
-	if (st->req_filetype == TYPE_MENU) {
+	if (st->req_filetype == TYPE_MENU || st->req_filetype == TYPE_QUERY) {
 
-		/* Output offical type 3 error message */
-		printf("3%s\t%s\t%s" CRLF, message, DUMMY_SELECTOR, DUMMY_HOST);
-		printf("3\t%s\t%s" CRLF, DUMMY_SELECTOR, DUMMY_HOST);
+		info(st, message, TYPE_TITLE);
+		info(st, EMPTY, TYPE_INFO);
+		info(st, message, TYPE_ERROR);
 
-		/* Mozilla discards errors, so duplicate the error as type i */
-		info(message);
+		footer(st);
 	}
 
 	/* Handle image errors */
@@ -98,10 +121,12 @@ void die(state *st, char *message)
 	}
 
 	/* Use plain text error for other filetypes */
-	else printf("Error: %s" CRLF, message);
+	else {
+		printf("Error: %s" CRLF, message);
+		footer(st);
+	}
 
-	/* Print footer & exit */
-	footer(st);
+	/* Quit */
 	exit(ERROR);
 }
 
@@ -121,7 +146,7 @@ void selector_to_path(state *st)
 	char *c;
 
 	/* Virtual userdir (~user -> /home/user/public_gopher)? */
-	if (*(st->user_dir) && strncmp(st->req_selector, "/~", 2) == FOUND) {
+	if (*(st->user_dir) && strncmp(st->req_selector, "/~", 2) == MATCH) {
 
 		/* Parse userdir login name & path */;
 		sstrlcpy(buf, st->req_selector + 2);
@@ -203,7 +228,7 @@ char *get_peer_address(void)
 
 	/* Are we a CGI script? */
 	if ((c = getenv("REMOTE_ADDR")) != NULL) return c;
-	if ((c = getenv("REMOTE_HOST")) != NULL) return c;
+	/* if ((c = getenv("REMOTE_HOST")) != NULL) return c; */
 
 	/* Try IPv4 first */
 #ifdef HAVE_IPv4
@@ -227,24 +252,76 @@ char *get_peer_address(void)
 
 
 /*
+ * Read & parse gopher++ headers
+ */
+#ifdef ENABLE_GOPHERPLUSPLUS
+void get_plusplus_headers(state *st)
+{
+	char buf[BUFSIZE];
+	char *c;
+	int i;
+
+	/* Loop through the client headers */
+	while (fgets(buf, sizeof(buf) - 1, stdin) != NULL) {
+
+		/* Empty line marks the end of headers */
+		chomp(buf);
+		if (!*buf) return;
+
+		/* Debug output */
+		if (st->debug) syslog(LOG_INFO, "got gopher++ header \"%s\"", buf);
+
+		/* Parse header */
+		if ((c = strheader(buf, "User-Agent"))) { sstrlcpy(st->req_user_agent, c); continue; }
+		if ((c = strheader(buf, "Referer"))) { sstrlcpy(st->req_referrer, c); continue; }
+		if ((c = strheader(buf, "Accept-Charset"))) { sstrlcpy(st->out_charset, c); continue; }
+		if ((c = strheader(buf, "Charset"))) { sstrlcpy(st->out_charset, c); continue; }
+		if ((c = strheader(buf, "Filetype"))) { st->req_filetype = *c; continue; }
+
+		if ((c = strheader(buf, "Columns"))) {
+			i = atoi(c);
+			if (i > MAX_WIDTH) i = MAX_WIDTH;
+			if (i < MIN_WIDTH) i = MIN_WIDTH;
+			if (i < MIN_WIDTH + DATE_WIDTH) st->opt_date = FALSE;
+			st->out_width = i;
+
+			continue;
+		}
+
+		if ((c = strheader(buf, "Host"))) {
+			sstrlcpy(st->server_host, c);
+
+			if ((c = strchr(st->server_host, ':'))) {
+				*c++ = '\0';
+				st->server_port = atoi(c);
+			}
+			continue;
+		}
+	}
+}
+#endif
+
+
+/*
  * Initialize state struct to default/empty values
  */
 void init_state(state *st)
 {
         /* Request */
-	sstrlcpy(st->req_protocol, PROTO_GOPHER);
+	sstrlcpy(st->req_protocol, PROTO_GOPHER0);
 	strclear(st->req_selector);
 	strclear(st->req_realpath);
 	strclear(st->req_query_string);
 	strclear(st->req_referrer);
 	sstrlcpy(st->req_remote_addr, DEFAULT_ADDR);
 	/* strclear(st->req_remote_host); */
+	strclear(st->req_user_agent);
         st->req_filetype = DEFAULT_TYPE;
 	st->req_filesize = 0;
 
         /* Output */
         st->out_width = DEFAULT_WIDTH;
-        sstrlcpy(st->out_ctype, DEFAULT_CTYPE);
+        sstrlcpy(st->out_charset, DEFAULT_CHARSET);
 
         /* Settings */
         sstrlcpy(st->server_root, DEFAULT_ROOT);
@@ -265,12 +342,13 @@ void init_state(state *st)
         st->session_max_hits = DEFAULT_SESSION_MAX_HITS;
 
         /* Feature options */
+	st->opt_vhost = TRUE;
         st->opt_parent = TRUE;
         st->opt_footer = TRUE;
         st->opt_date = TRUE;
         st->opt_syslog = TRUE;
         st->opt_magic = TRUE;
-	st->opt_vhost = TRUE;
+        st->opt_iconv = TRUE;
         st->debug = FALSE;
 }
 
@@ -317,7 +395,7 @@ int main(int argc, char *argv[])
 	}
 #endif
 
-	/* Check for root account */
+	/* Refuse to run as root */
 	if (getuid() == 0) die(&st, ERR_ROOT);
 
 	/* Get server hostname */
@@ -328,7 +406,7 @@ int main(int argc, char *argv[])
 	sstrlcpy(st.req_remote_addr, get_peer_address());
 
 	/* Handle command line arguments */
-	while ((i = getopt(argc, argv, "h:p:r:t:g:c:u:T:H:K:n:i:dl?-")) != ERROR) {
+	while ((i = getopt(argc, argv, "h:p:r:t:w:g:c:u:o:s:i:k:n:dl?-")) != ERROR) {
 		switch(i) {
 			case 'h': sstrlcpy(st.server_host, optarg); break;
 			case 'p': st.server_port = atoi(optarg); break;
@@ -338,9 +416,11 @@ int main(int argc, char *argv[])
 			case 'g': sstrlcpy(st.map_file, optarg); break;
 			case 'c': sstrlcpy(st.cgi_file, optarg); break;
 			case 'u': sstrlcpy(st.user_dir, optarg);  break;
-			case 'T': st.session_timeout = abs(atoi(optarg)); break;
-			case 'H': st.session_max_kbytes = abs(atoi(optarg)); break;
-			case 'K': st.session_max_hits = abs(atoi(optarg)); break;
+			case 'o': sstrlcpy(st.out_charset, optarg);  break;
+
+			case 's': st.session_timeout = atoi(optarg); break;
+			case 'i': st.session_max_kbytes = abs(atoi(optarg)); break;
+			case 'k': st.session_max_hits = abs(atoi(optarg)); break;
 
 			case 'n':
 				if (*optarg == 'v') { st.opt_vhost = FALSE; break; }
@@ -348,10 +428,10 @@ int main(int argc, char *argv[])
 				if (*optarg == 'f') { st.opt_footer = FALSE; break; }
 				if (*optarg == 'd') { st.opt_date = FALSE; break; }
 				if (*optarg == 'c') { st.opt_magic = FALSE; break; }
+				if (*optarg == 'o') { st.opt_iconv = FALSE; break; }
 				if (*optarg == 's') { st.opt_syslog = FALSE; break; }
 				break;
 
-			case 'i': sstrlcpy(st.req_remote_addr, optarg); break;
 			case 'd': st.debug = TRUE; break;
 			case 'l': printf(LICENSE);; return OK;
 			default : printf(README); return OK;
@@ -361,6 +441,7 @@ int main(int argc, char *argv[])
 	/* Sanitize options */
 	if (st.out_width > MAX_WIDTH) st.out_width = MAX_WIDTH;
 	if (st.out_width < MIN_WIDTH) st.out_width = MIN_WIDTH;
+	if (st.out_width  < MIN_WIDTH + DATE_WIDTH) st.opt_date = FALSE;
 	if (!st.opt_syslog) st.debug = FALSE;
 
 	/* Primary vhost directory must exist or we disable vhosting */
@@ -369,7 +450,7 @@ int main(int argc, char *argv[])
                 if (stat(buf, &file) == ERROR) {
 			st.opt_vhost = FALSE;
 			if (st.debug)
-				syslog(LOG_INFO, "disabling vhosting (primary vhost not found)");
+				syslog(LOG_INFO, "disabling vhosting: %s must exist", buf);
 		}
 	}
 
@@ -386,23 +467,23 @@ int main(int argc, char *argv[])
 	if (st.debug) syslog(LOG_INFO, "client sent us \"%s\"", buf + 1);
 
 	/* Handle hURL: redirect page */
-	if (strncmp(buf + 1, "URL:", 4) == FOUND) {
+	if (strncmp(buf + 1, "URL:", 4) == MATCH) {
 		url_redirect(&st, buf + 5);
 		return OK;
 	}
 
 	/* Handle /server-status */
 #ifdef HAVE_SHMEM
-	if (strncmp(buf + 1, SERVER_STATUS, sizeof(SERVER_STATUS) - 1) == FOUND) {
+	if (strncmp(buf + 1, SERVER_STATUS, sizeof(SERVER_STATUS) - 1) == MATCH) {
 		if (shm) server_status(&st, shm, shmid);
 		return OK;
 	}
 
 	/* We'll handle HTTP requests for /server-status too */
-	if (strncmp(buf + 1, "GET " SERVER_STATUS, sizeof("GET " SERVER_STATUS) - 1) == FOUND) {
+	if (strncmp(buf + 1, "GET " SERVER_STATUS, sizeof("GET " SERVER_STATUS) - 1) == MATCH) {
 		printf("HTTP/1.0 200 OK" CRLF);
 		printf("Content-Type: text/plain" CRLF);
-		printf("Server: " SERVER_SOFTWARE CRLF CRLF);
+		printf("Server: " SERVER_SOFTWARE CRLF CRLF, platform());
 
 		if (shm) server_status(&st, shm, shmid);
 		return OK;
@@ -410,20 +491,14 @@ int main(int argc, char *argv[])
 #endif
 
 	/* Redirect HTTP requests to gopher */
-	if (strncmp(buf + 1, "GET ", 4) == FOUND) {
+	if (strncmp(buf + 1, "GET ", 4) == MATCH) {
 		if (st.debug) syslog(LOG_INFO, "got http request, redirecting to gopher");
 
 		printf("HTTP/1.0 301 Moved Permanently" CRLF);
 		printf("Location: gopher://%s:%i/" CRLF, st.server_host, st.server_port);
-		printf("Server: " SERVER_SOFTWARE CRLF CRLF);
+		printf("Server: " SERVER_SOFTWARE CRLF CRLF, platform());
 		return OK;
 	}
-
-	/* Guess request filetype so we can die() with style... */
-	i = st.opt_magic;
-	st.opt_magic = FALSE;	/* Don't stat() now */
-	st.req_filetype = gopher_filetype(&st, buf);
-	st.opt_magic = i;
 
 	/* Save default server_host & fetch session data (including new server_host) */
 	sstrlcpy(st.server_host_default, st.server_host);
@@ -442,54 +517,77 @@ int main(int argc, char *argv[])
 		/* Skip duplicate slashes */
 		while (*c == '/' && *(c + 1) == '/') c++;
 
-		/* Start of a query string? */
-		if (*c == '?' || *c == '\t') {
+		/* Start of a type 7 query string? */
+		if (*c == '\t') {
 			sstrlcpy(st.req_query_string, c + 1);
 
-			/* gopher+ request? */
+			/* Query ends on first tab */
 			if ((z = strchr(st.req_query_string, '\t'))) {
-				*z = '\0';
-				sstrlcpy(st.req_protocol, PROTO_GOPHERPLUS);
+				*z++ = '\0';
+
+				/* Detect gopher protocol version */
+				if (strcmp(z, "+") == MATCH)
+					sstrlcpy(st.req_protocol, PROTO_GOPHERPLUS);
+
+				else if (strcmp(z, PROTO_GOPHERPLUSPLUS) == MATCH)
+					sstrlcpy(st.req_protocol, PROTO_GOPHERPLUSPLUS);
 			}
+
 			break;
 		}
 
 		/* Start of virtual host hint? */
 		if (*c == ';') {
-			if (st.opt_vhost) sstrlcpy(st.server_host, c + 1);
-			break;
+			if (st.opt_vhost) {
+				sstrlcpy(st.server_host, c + 1);
+				if ((z = strchr(st.server_host, '\t'))) *z = '\0';
+			}
+
+			/* Skip vhost on selector */
+			while (*c && *c != '\t') c++;
+			continue;
 		}
 
 		/* Copy valid char */
 		*dest++ = *c++;
 	}
-
-	/* Zero-terminate selector */
 	*dest = '\0';
+
+	/* Separate HTTP-style query string */
+	if ((z = strchr(st.req_selector, '?'))) {
+		*z++ = '\0';
+		sstrlcpy(st.req_query_string, z);
+	}
+
+	/* Guess request filetype so we can die() with style... */
+	i = st.opt_magic;
+	st.opt_magic = FALSE;	/* Don't stat() now */
+	st.req_filetype = gopher_filetype(&st, st.req_selector);
+	st.opt_magic = i;
+
+	/* Handle gopher++ extra headers */
+#ifdef ENABLE_GOPHERPLUSPLUS
+	if (strcmp(st.req_protocol, PROTO_GOPHERPLUSPLUS) == MATCH)
+		get_plusplus_headers(&st);
+#endif
 
 	/* Convert seletor to path & stat() */
 	selector_to_path(&st);
 	if (st.debug) syslog(LOG_INFO, "path to resource is \"%s\"", st.req_realpath);
 	if (stat(st.req_realpath, &file) == ERROR) die(&st, ERR_NOTFOUND);
+	st.req_filesize = file.st_size;
 
 	/* Everyone must have read access but no write access */
 	if ((file.st_mode & S_IROTH) == 0) die(&st, ERR_ACCESS);
 	if ((file.st_mode & S_IWOTH) != 0) die(&st, ERR_ACCESS);
 
-	/* Keep stat() results for later use */
-	st.req_filesize = file.st_size;
-
 	/* If stat said it was a dir then it's a menu */
-	if ((file.st_mode & S_IFMT) == S_IFDIR && st.req_filetype != TYPE_MENU) {
+	if ((file.st_mode & S_IFMT) == S_IFDIR && st.req_filetype != TYPE_MENU)
 		st.req_filetype = TYPE_MENU;
 
-		/* Menu selectors must end with a slash */
-		if (strlast(st.req_selector) != '/')
-			strlcat(st.req_selector, "/", sizeof(st.req_selector));
-	}
-
-	/* Not a dir - let's guess the filetype again... */
-	else st.req_filetype = gopher_filetype(&st, st.req_realpath);
+	/* Menu selectors must end with a slash */
+	if (st.req_filetype == TYPE_MENU && strlast(st.req_selector) != '/')
+		sstrlcat(st.req_selector, "/");
 
 	/* Keep count of hits and data transfer */
 #ifdef HAVE_SHMEM
@@ -503,13 +601,15 @@ int main(int argc, char *argv[])
 #endif
 
 	/* Log the request */
+	if (!*st.req_user_agent) sstrlcpy(st.req_user_agent, st.req_protocol);
 	if (st.opt_syslog) {
-		syslog(LOG_INFO, "request for \"gopher://%s:%i/%c%s\" from %s",
+		syslog(LOG_INFO, "request for \"gopher://%s:%i/%c%s\" from %s using \"%s\"",
 			st.server_host,
 			st.server_port,
 			st.req_filetype,
 			st.req_selector,
-			st.req_remote_addr);
+			st.req_remote_addr,
+			st.req_user_agent);
 	}
 
 	/* Check file type & act accordingly */

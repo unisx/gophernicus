@@ -1,10 +1,12 @@
+!Sample gophermap for the Gohphernicus Server
+
 ##
 ## This is a sample gophermap.
 ##
 #
-Putting a file called "gophermap" into a directory disables the normal
-resource listing and replaces it with the contents of the map file.
-You can also have inline gophermaps - files with a ".gophermap"
+Creating a file called "gophermap" into a directory disables the
+normal resource listing and replaces it with the contents of the map
+file. You can also have inline gophermaps - files with a ".gophermap"
 extension are parsed as gophermaps and displayed in between normal
 resources in alphabetical order.
 
@@ -23,9 +25,9 @@ Where:
    selector   is the path to resource
    host:port  are the hostname and port number to go to
 
-Type and selector are mandatory, if you don't specify host or port the
-host:port of the current server are used instead. Also make sure to use
-ONLY ONE TAB between the fields.
+Type and selector are mandatory, if you don't specify host or port
+the host:port of the current server are used instead. Also make sure
+to use ONLY ONE TAB between the fields.
 
 Valid filetypes include:
    0   text file
@@ -43,6 +45,7 @@ Valid filetypes include:
 
 Additional type characters supported by Gophernicus:
    #   comment - rest of the line is ignored
+   !   title resource for gopher++ clients
    -   hide the file referred in name (no wildcards)
    ~   include a list of users who have ~/public_gopher
    %   include a list of available virtual hosts

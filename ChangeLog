@@ -1,5 +1,26 @@
+2010-04-05  Kim Holviala  <kim@holviala.com>
+
+	* Released version 0.5
+	* Code tested to work on 32-bit Linux/armv5tel
+	* Filetype 7 query errors are now handled properly
+	* HTTP-style query string overrides type 7 query
+	* Protocol detection (0/+/++) works properly
+	* gopher++ extra headers parsed correctly
+	* gopher++ works ok with a patched NSCA Mosaic!
+	* ISO-8859-1 (Latin-1) output
+	* Full UTF-8 output support (without widechars)
+	* Gophermaps are converted to output charset
+	* All type 0 output is converted to output charset
+	* All charset conversions can be disabled with option -no
+	* !Titles in gophermaps are converted to gopher++ menu titles
+	* Automatically generates gopher++ titles for menus
+	* Compile-time option to strictly adhere to RFC 1436
+	* Compile-time option to disable all gopher++ support
+
+
 2010-03-29  Kim Holviala  <kim@holviala.com>
 
+	* Released version 0.4
 	* Renamed the project to "Gophernicus Server"
 	* Major rewrite with much cleaner code
 	* Changed all strncpy's to the OpenBSD strlcpy
