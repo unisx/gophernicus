@@ -29,8 +29,6 @@
 /*
  * Features
  */
-
-#define ENABLE_GOPHERPLUSPLUS	/* Include gopher++ support */
 #undef  ENABLE_STRICT_RFC1436	/* Follow RFC1436 to the letter */
 
 
@@ -46,6 +44,7 @@
 #define HAVE_LOCALES		/* setlocale() and friends */
 #define HAVE_SHMEM		/* Shared memory support */
 #define HAVE_UNAME		/* uname() */
+#define HAVE_POPEN		/* popen() */
 #undef  HAVE_STRLCPY		/* strlcpy() from OpenBSD */
 #undef  HAVE_SENDFILE		/* sendfile() in Linux & others */
 
@@ -116,15 +115,12 @@
 #define FALSE		0
 #define TRUE		1
 
+#define QUIT		1
 #define OK		0
 #define ERROR		-1
 
 #define MATCH		0
 
-/* Protocol names */
-#define PROTO_GOPHER0		"GOPHER/0"
-#define PROTO_GOPHERPLUS	"GOPHER/+"
-#define PROTO_GOPHERPLUSPLUS	"GOPHER/++"
 
 /* Gopher filetypes */
 #define TYPE_TEXT	'0'
@@ -133,6 +129,7 @@
 #define TYPE_QUERY	'7'
 #define TYPE_BINARY	'9'
 #define TYPE_GIF	'g'
+#define TYPE_HTML	'h'
 #define TYPE_INFO	'i'
 #define TYPE_IMAGE	'I'
 #define TYPE_TITLE	'!'
@@ -158,7 +155,7 @@
 
 /* Dummy values for gopher protocol */
 #define DUMMY_SELECTOR	"null"
-#define DUMMY_HOST	"invalid.host\t0"
+#define DUMMY_HOST	"null.host\t1"
 
 /* Safe $PATH for exec() */
 #define SAFE_PATH	"/usr/bin:/bin"
@@ -173,8 +170,11 @@
 #define ERR_NOSEL	"No selector!"
 #define ERR_EXE		"Couldn't execute file!"
 
+#define ERROR_HOST	"error.host\t1"
+#define ERROR_PREFIX	"Error: "
+
 /* String formats */
-#define SERVER_SOFTWARE	"Gophernicus/" VERSION " (Server; %s)"
+#define SERVER_SOFTWARE	"Gophernicus/" VERSION " (%s)"
 #define HEADER_FORMAT	"[%s]"
 #define FOOTER_FORMAT	"Gophered by Gophernicus/" VERSION " on %s"
 
@@ -216,14 +216,11 @@ typedef struct {
 typedef struct {
 
 	/* Request */
-	char req_protocol[16];
 	char req_selector[BUFSIZE];
 	char req_realpath[BUFSIZE];
 	char req_query_string[BUFSIZE];
 	char req_referrer[BUFSIZE];
 	char req_remote_addr[64];
-	/* char req_remote_host[64]; */
-	char req_user_agent[64];
 	char req_filetype;
 	off_t req_filesize;
 
@@ -257,6 +254,7 @@ typedef struct {
 
 	/* Feature options */
 	char opt_parent;
+	char opt_header;
 	char opt_footer;
 	char opt_date;
 	char opt_syslog;
@@ -333,6 +331,7 @@ typedef struct {
 #define strclear(str) str[0] = '\0';
 #define sstrlcpy(dest, src) strlcpy(dest, src, sizeof(dest))
 #define sstrlcat(dest, src) strlcat(dest, src, sizeof(dest))
+#define sstrncmp(s1, s2) strncmp(s1, s2, sizeof(s2) - 1)
 
 
 /*

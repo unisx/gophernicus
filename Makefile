@@ -1,7 +1,7 @@
 NAME    = gophernicus
 PACKAGE = $(NAME)-server
 BINARY  = in.$(NAME)
-VERSION = 0.7
+VERSION = 0.8
 
 SOURCES = $(NAME).c file.c menu.c string.c platform.c session.c
 HEADERS = functions.h files.h

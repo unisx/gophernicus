@@ -1,3 +1,20 @@
+2010-04-30  Kim Holviala  <kim@holviala.com>
+
+	* Released version 0.8
+	* Security bug in hURL handler fixed
+	* Error pages are now correctly generated for type 'h'
+	* Menu error page more compatible with clients
+	* New macro sstrncmp() compares without explicit sizeof()
+	* Removed all traces of gopher++ protocol (extra headers)
+	  as it just didn't work with older (circa '92) servers
+	* Added option to disable automatic menu headers (titles)
+	* Do a chdir() to the resource dir before doing anything
+	* Double-slashes were slashed in QUERY_STRING by accident
+	* Relative links to external hosts work properly in gophermap
+	* Gophermaps can include other gophermaps with =/path/to/file
+	* Executable gophermaps are parsed just like static ones
+
+
 2010-04-13  Kim Holviala  <kim@holviala.com>
 
 	* Released version 0.7
@@ -42,8 +59,8 @@
 	* Gophermaps are converted to output charset
 	* All type 0 output is converted to output charset
 	* All charset conversions can be disabled with option -no
-	* !Titles in gophermaps are converted to gopher++ menu titles
-	* Automatically generates gopher++ titles for menus
+	* !Titles in gophermaps are converted to gopher menu titles
+	* Automatically generates gopher title resources for menus
 	* Compile-time option to strictly adhere to RFC 1436
 	* Compile-time option to disable all gopher++ support
 

@@ -23,6 +23,7 @@ Command line options:
 
     -nv           Disable virtual hosting
     -nl           Disable parent directory links
+    -nh           Disable menu header (title)
     -nf           Disable menu footer
     -nd           Disable date and filesize in menus
     -nc           Disable file content detection
@@ -39,7 +40,7 @@ Setting up a gopher site
 
 After succesfully installing Gophernicus Server (see INSTALL) you need
 to set up the gopher root directory. By default Gophernicus serves
-documents from /var/gopher, so start by creating that directory and
+documents from /var/gopher so start by creating that directory and
 making sure it's world-readable. Then, simply add files and
 directories under your root, fire up a gopher browser (Firefox, Lynx)
 and open up this URL:
@@ -47,7 +48,7 @@ and open up this URL:
 gopher://<HOSTNAME>/   (where <HOSTNAME> is your servers hostname)
 
 That's it, your first gopher site is now up and running. If the links
-on the root menu won't work, make sure you are using the -h <HOSTNAME>
+on the root menu don't work, make sure you are using the -h <HOSTNAME>
 parameter in your inetd.conf (with a valid resolveable hostname
 instead of <HOSTNAME> - see INSTALL).
 
@@ -81,32 +82,33 @@ Personal gopherspaces
 =====================
 
 Gophernicus Server supports users personal gopherspaces. If a user has
-world-readable /public_gopher/ under his home directory, a request
-for gopher://<HOSTNAME>/1/~user/ will serve documents from that
-directory.
+world-readable directory called public_gopher/ under his home, a
+request for gopher://<HOSTNAME>/1/~user/ will serve documents from
+that directory.
 
 
 Virtual hosting
 ===============
 
 Gophernicus Server supports virtual hosting, or serving more than one
-logical domain using the same IP address. With gopher0 (RFC1436)
-clients this requires some clever (but mostly invisble) hacks, but
-with gopher++ clients it all works transparently.
+logical domain using the same IP address. Since gopher (RFC1436)
+doesn't support virtual hosting this requires some clever (but mostly
+invisble) hacks.
 
 To enable virtual hosting create one or more directories under your
 gopher root which are named after your domain names. The primary vhost
 directory (set with the -h <HOSTNAME> option) must exist or virtual
 hosting will be disabled. Then simply add content to the hostname
-directories and you're all set...
+directories and you're up and running.
 
-... or, with gopher++ clients you are. To make gopher0 clients work
-properly with virtual hosting, create a root gophermap for each of
-your domains and include the "%" type character to create a list of
-all available virtual hosts (see GOPHERMAP). The generated virtual
-host links will be created so that standard gopher0 clients will find
-the correct domain even when they don't specifically tell the server
-which host they're trying to reach.
+Almost.
+
+To make gopher clients work properly with virtual hosting, create a
+root gophermap for each of your domains and include the "%" type
+character to create a list of all available virtual hosts (see
+GOPHERMAP). The generated virtual host links will be created so that
+standard gopher clients will find the correct domain even when they
+don't specifically tell the server which host they're trying to reach.
 
 
 CGI support
@@ -163,23 +165,20 @@ conversion is input autosensing which means that you don't have to
 specify your filesystem charset, or the charset of your text files -
 it's all detected automatically.
 
-With gopher0 (RFC1436) clients this is a bit of a problem as your text
+With standard gopher clients this is a bit of a problem as your text
 files WILL be converted to 7-bit US-ASCII. This means that all 8-bit
-charaters WILL BE LOST. This decision was made because no gopher0
+charaters WILL BE LOST. This decision was made because no gopher
 client that I tested was reliably cabable of decoding anything else
 than pure US-ASCII. If you want to disable the conversion use the
 "-no" option, or if you'd like to change the default output charset to
 something else than US-ASCII just use for example the "-o ISO-8859-1"
 option.
 
-The newer gopher++ clients will most likely ask the server for a
-charset they know they can handle so the above warnings don't apply.
-
 
 Session tracking and statistics
 ===============================
 
-To enable virtual hosting with gopher0 (RFC1436) clients Gophernicus
+To enable virtual hosting with gopher (RFC1436) clients Gophernicus
 Server tracks users and their session. As a side effect of that
 session tracking, Gophernicus has simple throttling controls to
 keep nasty users from killing your precious 120MHz 604e server from
@@ -190,7 +189,7 @@ throttled.
 
 The current sessions and other real-time status data can be viewed
 by opening the URL gopher://<HOSTNAME>/0/server-status . This status
-view has been modeled after the Apache server-status, which means
+view has been modeled after the Apache server-status which means
 that it's possible to integrate Gophernicus Server into existing
 server monitoring systems. To ease up such integrations, Gophernicus 
 supports HTTP requests of the server-status page using an URL like

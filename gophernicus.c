@@ -50,7 +50,7 @@ void info(state *st, char *str, char type)
 	if (st->opt_iconv) strniconv(st->out_charset, buf, str, sizeof(buf));
 	else sstrlcpy(buf, str);
 
-	/* Handle gopher++ titles */
+	/* Handle gopher title resources */
 	strclear(selector);
 	if (type == TYPE_TITLE) {
 		sstrlcpy(selector, "TITLE");
@@ -107,11 +107,7 @@ void die(state *st, char *message)
 
 	/* Handle menu errors */
 	if (st->req_filetype == TYPE_MENU || st->req_filetype == TYPE_QUERY) {
-
-		info(st, message, TYPE_TITLE);
-		info(st, EMPTY, TYPE_INFO);
-		info(st, message, TYPE_ERROR);
-
+		printf("i" ERROR_PREFIX "%s\tTITLE\t" DUMMY_HOST CRLF, message);
 		footer(st);
 	}
 
@@ -120,14 +116,27 @@ void die(state *st, char *message)
 		fwrite(error_gif, sizeof(error_gif), 1, stdout);
 	}
 
+	/* Handle HTML errors */
+	else if (st->req_filetype == TYPE_HTML) {
+		printf("<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 3.2 Final//EN\">\n"
+			"<HTML>\n<HEAD>\n"
+			"  <META HTTP-EQUIV=\"Content-Type\" CONTENT=\"text/html;charset=iso-8859-1\">\n"
+			"  <TITLE>" ERROR_PREFIX "%1$s</TITLE>\n"
+			"</HEAD>\n<BODY>\n"
+			"<STRONG>" ERROR_PREFIX "%1$s</STRONG>\n"
+			"<PRE>\n", message);
+		footer(st);
+		printf("</PRE>\n</BODY>\n</HTML>\n");
+	}
+
 	/* Use plain text error for other filetypes */
 	else {
-		printf("Error: %s" CRLF, message);
+		printf(ERROR_PREFIX "%s" CRLF, message);
 		footer(st);
 	}
 
 	/* Quit */
-	exit(ERROR);
+	exit(EXIT_FAILURE);
 }
 
 
@@ -146,7 +155,7 @@ void selector_to_path(state *st)
 	char *c;
 
 	/* Virtual userdir (~user -> /home/user/public_gopher)? */
-	if (*(st->user_dir) && strncmp(st->req_selector, "/~", 2) == MATCH) {
+	if (*(st->user_dir) && sstrncmp(st->req_selector, "/~") == MATCH) {
 
 		/* Parse userdir login name & path */;
 		sstrlcpy(buf, st->req_selector + 2);
@@ -245,7 +254,7 @@ char *get_peer_address(void)
 		if (inet_ntop(AF_INET6, &addr6.sin6_addr, address, sizeof(address)) != NULL) {
 
 			/* Strip ::ffff: IPv4-in-IPv6 prefix */
-			if (strncmp(address, "::ffff:", 7) == MATCH) return (address + 7);
+			if (sstrncmp(address, "::ffff:") == MATCH) return (address + 7);
 			else return address;
 		}
 	}
@@ -257,57 +266,6 @@ char *get_peer_address(void)
 
 
 /*
- * Read & parse gopher++ headers
- */
-#ifdef ENABLE_GOPHERPLUSPLUS
-void get_plusplus_headers(state *st)
-{
-	char buf[BUFSIZE];
-	char *c;
-	int i;
-
-	/* Loop through the client headers */
-	while (fgets(buf, sizeof(buf) - 1, stdin) != NULL) {
-
-		/* Empty line marks the end of headers */
-		chomp(buf);
-		if (!*buf) return;
-
-		/* Debug output */
-		if (st->debug) syslog(LOG_INFO, "got gopher++ header \"%s\"", buf);
-
-		/* Parse header */
-		if ((c = strheader(buf, "User-Agent"))) { sstrlcpy(st->req_user_agent, c); continue; }
-		if ((c = strheader(buf, "Referer"))) { sstrlcpy(st->req_referrer, c); continue; }
-		if ((c = strheader(buf, "Accept-Charset"))) { sstrlcpy(st->out_charset, c); continue; }
-		if ((c = strheader(buf, "Charset"))) { sstrlcpy(st->out_charset, c); continue; }
-		if ((c = strheader(buf, "Filetype"))) { st->req_filetype = *c; continue; }
-
-		if ((c = strheader(buf, "Columns"))) {
-			i = atoi(c);
-			if (i > MAX_WIDTH) i = MAX_WIDTH;
-			if (i < MIN_WIDTH) i = MIN_WIDTH;
-			if (i < MIN_WIDTH + DATE_WIDTH) st->opt_date = FALSE;
-			st->out_width = i;
-
-			continue;
-		}
-
-		if ((c = strheader(buf, "Host"))) {
-			sstrlcpy(st->server_host, c);
-
-			if ((c = strchr(st->server_host, ':'))) {
-				*c++ = '\0';
-				st->server_port = atoi(c);
-			}
-			continue;
-		}
-	}
-}
-#endif
-
-
-/*
  * Initialize state struct to default/empty values
  */
 void init_state(state *st)
@@ -316,14 +274,12 @@ void init_state(state *st)
 	int i;
 
         /* Request */
-	sstrlcpy(st->req_protocol, PROTO_GOPHER0);
 	strclear(st->req_selector);
 	strclear(st->req_realpath);
 	strclear(st->req_query_string);
 	strclear(st->req_referrer);
 	sstrlcpy(st->req_remote_addr, DEFAULT_ADDR);
 	/* strclear(st->req_remote_host); */
-	strclear(st->req_user_agent);
         st->req_filetype = DEFAULT_TYPE;
 	st->req_filesize = 0;
 
@@ -355,6 +311,7 @@ void init_state(state *st)
         /* Feature options */
 	st->opt_vhost = TRUE;
         st->opt_parent = TRUE;
+        st->opt_header = TRUE;
         st->opt_footer = TRUE;
         st->opt_date = TRUE;
         st->opt_syslog = TRUE;
@@ -442,6 +399,7 @@ void parse_args(state *st, int argc, char *argv[])
 			case 'n':
 				if (*optarg == 'v') { st->opt_vhost = FALSE; break; }
 				if (*optarg == 'l') { st->opt_parent = FALSE; break; }
+				if (*optarg == 'h') { st->opt_header = FALSE; break; }
 				if (*optarg == 'f') { st->opt_footer = FALSE; break; }
 				if (*optarg == 'd') { st->opt_date = FALSE; break; }
 				if (*optarg == 'c') { st->opt_magic = FALSE; break; }
@@ -450,8 +408,8 @@ void parse_args(state *st, int argc, char *argv[])
 				break;
 
 			case 'd': st->debug = TRUE; break;
-			case 'l': printf(license); exit(OK);
-			default : printf(readme); exit(OK);
+			case 'l': printf(license); exit(EXIT_SUCCESS);
+			default : printf(readme); exit(EXIT_SUCCESS);
 		}
 	}
 
@@ -484,7 +442,6 @@ int main(int argc, char *argv[])
 	char buf[BUFSIZE];
 	char *dest;
 	char *c;
-	char *z;
 	int i;
 #ifdef HAVE_SHMEM
 	struct shmid_ds shm_ds;
@@ -558,20 +515,22 @@ int main(int argc, char *argv[])
 	if (st.debug) syslog(LOG_INFO, "client sent us \"%s\"", buf + 1);
 
 	/* Handle hURL: redirect page */
-	if (strncmp(buf + 1, "URL:", 4) == MATCH) {
-		url_redirect(&st, buf + 5);
+	if (sstrncmp(buf + 1, "URL:") == MATCH) {
+		st.req_filetype = TYPE_HTML;
+		sstrlcpy(st.req_selector, buf + 5);
+		url_redirect(&st);
 		return OK;
 	}
 
 	/* Handle /server-status */
 #ifdef HAVE_SHMEM
-	if (strncmp(buf + 1, SERVER_STATUS, sizeof(SERVER_STATUS) - 1) == MATCH) {
+	if (sstrncmp(buf + 1, SERVER_STATUS) == MATCH) {
 		if (shm) server_status(&st, shm, shmid);
 		return OK;
 	}
 
 	/* We'll handle HTTP requests for /server-status too */
-	if (strncmp(buf + 1, "GET " SERVER_STATUS, sizeof("GET " SERVER_STATUS) - 1) == MATCH) {
+	if (sstrncmp(buf + 1, "GET " SERVER_STATUS) == MATCH) {
 		printf("HTTP/1.0 200 OK" CRLF);
 		printf("Content-Type: text/plain" CRLF);
 		printf("Server: " SERVER_SOFTWARE CRLF CRLF, st.server_platform);
@@ -582,7 +541,7 @@ int main(int argc, char *argv[])
 #endif
 
 	/* Redirect HTTP requests to gopher */
-	if (strncmp(buf + 1, "GET ", 4) == MATCH) {
+	if (sstrncmp(buf + 1, "GET ") == MATCH) {
 		if (st.debug) syslog(LOG_INFO, "got http request, redirecting to gopher");
 
 		printf("HTTP/1.0 301 Moved Permanently" CRLF);
@@ -608,31 +567,16 @@ int main(int argc, char *argv[])
 		/* Skip duplicate slashes */
 		while (*c == '/' && *(c + 1) == '/') c++;
 
-		/* Start of a type 7 query string? */
-		if (*c == '\t') {
+		/* Start of a query string (either type 7 or HTTP-style)? */
+		if (*c == '\t' || *c == '?') {
 			sstrlcpy(st.req_query_string, c + 1);
-
-			/* Query ends on first tab */
-			if ((z = strchr(st.req_query_string, '\t'))) {
-				*z++ = '\0';
-
-				/* Detect gopher protocol version */
-				if (strcmp(z, "+") == MATCH)
-					sstrlcpy(st.req_protocol, PROTO_GOPHERPLUS);
-
-				else if (strcmp(z, PROTO_GOPHERPLUSPLUS) == MATCH)
-					sstrlcpy(st.req_protocol, PROTO_GOPHERPLUSPLUS);
-			}
-
+			if ((c = strchr(st.req_query_string, '\t'))) *c = '\0';
 			break;
 		}
 
 		/* Start of virtual host hint? */
 		if (*c == ';') {
-			if (st.opt_vhost) {
-				sstrlcpy(st.server_host, c + 1);
-				if ((z = strchr(st.server_host, '\t'))) *z = '\0';
-			}
+			if (st.opt_vhost) sstrlcpy(st.server_host, c + 1);
 
 			/* Skip vhost on selector */
 			while (*c && *c != '\t') c++;
@@ -644,23 +588,14 @@ int main(int argc, char *argv[])
 	}
 	*dest = '\0';
 
-	/* Separate HTTP-style query string */
-	if ((z = strchr(st.req_selector, '?'))) {
-		*z++ = '\0';
-		sstrlcpy(st.req_query_string, z);
-	}
+	/* Remove possible extra cruft from server_host */
+	if ((c = strchr(st.server_host, '\t'))) *c = '\0';
 
 	/* Guess request filetype so we can die() with style... */
 	i = st.opt_magic;
 	st.opt_magic = FALSE;	/* Don't stat() now */
 	st.req_filetype = gopher_filetype(&st, st.req_selector);
 	st.opt_magic = i;
-
-	/* Handle gopher++ extra headers */
-#ifdef ENABLE_GOPHERPLUSPLUS
-	if (strcmp(st.req_protocol, PROTO_GOPHERPLUSPLUS) == MATCH)
-		get_plusplus_headers(&st);
-#endif
 
 	/* Convert seletor to path & stat() */
 	selector_to_path(&st);
@@ -673,12 +608,17 @@ int main(int argc, char *argv[])
 	if ((file.st_mode & S_IWOTH) != 0) die(&st, ERR_ACCESS);
 
 	/* If stat said it was a dir then it's a menu */
-	if ((file.st_mode & S_IFMT) == S_IFDIR && st.req_filetype != TYPE_MENU)
-		st.req_filetype = TYPE_MENU;
+	if ((file.st_mode & S_IFMT) == S_IFDIR) st.req_filetype = TYPE_MENU;
 
 	/* Menu selectors must end with a slash */
 	if (st.req_filetype == TYPE_MENU && strlast(st.req_selector) != '/')
 		sstrlcat(st.req_selector, "/");
+
+	/* Change directory to wherever the resource was */
+	sstrlcpy(buf, st.req_realpath);
+	if ((file.st_mode & S_IFMT) != S_IFDIR) dirname(buf);
+
+	if (chdir(buf) == ERROR) die(&st, ERR_ACCESS);
 
 	/* Keep count of hits and data transfer */
 #ifdef HAVE_SHMEM
@@ -692,15 +632,13 @@ int main(int argc, char *argv[])
 #endif
 
 	/* Log the request */
-	if (!*st.req_user_agent) sstrlcpy(st.req_user_agent, st.req_protocol);
 	if (st.opt_syslog) {
-		syslog(LOG_INFO, "request for \"gopher://%s:%i/%c%s\" from %s using \"%s\"",
+		syslog(LOG_INFO, "request for \"gopher://%s:%i/%c%s\" from %s",
 			st.server_host,
 			st.server_port,
 			st.req_filetype,
 			st.req_selector,
-			st.req_remote_addr,
-			st.req_user_agent);
+			st.req_remote_addr);
 	}
 
 	/* Check file type & act accordingly */

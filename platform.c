@@ -106,6 +106,7 @@ float loadavg(void)
 
 	/* Generic slow version - parse the output of uptime */
 #else
+#ifdef HAVE_POPEN
 	char *c;
 
 	if ((fp = popen("/usr/bin/uptime", "r")) != NULL) {
@@ -115,6 +116,7 @@ float loadavg(void)
 		if ((c = strstr(buf, "average: ")))
 			return (float) atof(c + 10);
 	}
+#endif
 
 	/* Fallback reply */
 	return 0;

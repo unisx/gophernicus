@@ -97,13 +97,23 @@ void send_text_file(state *st)
 /*
  * Print hURL redirect page
  */
-void url_redirect(state *st, char *url)
+void url_redirect(state *st)
 {
+	char *c;
+
 	/* Log the redirect */
 	if (st->opt_syslog) {
 		syslog(LOG_INFO, "request for \"hURL:%s\" from %s",
-			url, st->req_remote_addr);
+			st->req_selector, st->req_remote_addr);
 	}
+
+	/* Basic security checking */
+	if (sstrncmp(st->req_selector, "http://") != MATCH &&
+	    sstrncmp(st->req_selector, "ftp://") != MATCH &&
+	    sstrncmp(st->req_selector, "mailto:") != MATCH) die(st, ERR_ACCESS);
+
+	if ((c = strchr(st->req_selector, '"'))) *c = '\0';
+	if ((c = strchr(st->req_selector, '?'))) *c = '\0';
 
 	/* Output HTML */
 	printf("<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 3.2 Final//EN\">\n"
@@ -112,10 +122,10 @@ void url_redirect(state *st, char *url)
 		"  <META HTTP-EQUIV=\"Content-Type\" CONTENT=\"text/html;charset=iso-8859-1\">\n"
 		"  <TITLE>URL Redirect page</TITLE>\n"
 		"</HEAD>\n<BODY>\n"
-		"<P ALIGN=center>\n"
-		"  <STRONG>Redirecting to: <A HREF=\"%1$s\">%1$s</A></STRONG>\n"
-		"</P>\n"
-		"</BODY>\n</HTML>\n", url);
+		"<STRONG>Redirecting to <A HREF=\"%1$s\">%1$s</A></STRONG>\n"
+		"<PRE>\n", st->req_selector);
+	footer(st);
+	printf("</PRE>\n</BODY>\n</HTML>\n");
 }
 
 
@@ -166,7 +176,6 @@ void server_status(state *st, shm_state *shm, int shmid)
 			shm->kbytes * 1024 / (shm->hits + 1),
 			(int) shm_ds.shm_nattch,
 			loadavg());
-	printf("Server: " SERVER_SOFTWARE CRLF, st->server_platform);
 
 	/* Print active sessions */
 	sessions = 0;
@@ -175,7 +184,7 @@ void server_status(state *st, shm_state *shm, int shmid)
 		if ((now - shm->session[i].req_atime) < st->session_timeout) {
 			sessions++;
 
-			printf("Session: %-4i %-40s %-4li %-7li gopher://%s:%i/%c%s\n",
+			printf("Session: %-4i %-40s %-4li %-7li gopher://%s:%i/%c%s" CRLF,
 				(int) (now - shm->session[i].req_atime),
 				shm->session[i].req_remote_addr,
 				shm->session[i].hits,
@@ -187,19 +196,18 @@ void server_status(state *st, shm_state *shm, int shmid)
 		}
 	}
 
-	printf("Total Sessions: %i\n", sessions);
+	printf("Total Sessions: %i" CRLF, sessions);
+	printf("Server: " SERVER_SOFTWARE CRLF, st->server_platform);
 }
 #endif
 
 
 /*
- * Execute a CGI script
+ * Setup environment variables as per the CGI spec
  */
-void runcgi(state *st, char *file, char *arg)
+void setenv_cgi(state *st, char *script)
 {
 	char buf[BUFSIZE];
-
-	if (st->debug) syslog(LOG_INFO, "executing file \"%s\"", file);
 
 	/* Security */
 	setenv("PATH", SAFE_PATH, 1);
@@ -210,30 +218,23 @@ void runcgi(state *st, char *file, char *arg)
 	setenv("QUERY_STRING", st->req_query_string, 1);
 	snprintf(buf, sizeof(buf), SERVER_SOFTWARE, st->server_platform);
 	setenv("SERVER_SOFTWARE", buf, 1);
-#ifdef ENABLE_GOPHERPLUSPLUS
-	setenv("SERVER_PROTOCOL", PROTO_GOPHERPLUSPLUS, 1);
-#else
-	setenv("SERVER_PROTOCOL", PROTO_GOPHER0, 1);
-#endif
+	setenv("SERVER_PROTOCOL", "RFC1436", 1);
 	setenv("SERVER_NAME", st->server_host, 1);
 	snprintf(buf, sizeof(buf), "%i", st->server_port);
 	setenv("SERVER_PORT", buf, 1);
 	setenv("REQUEST_METHOD", "GET", 1);
 	setenv("DOCUMENT_ROOT", st->server_root, 1);
 	setenv("SCRIPT_NAME", st->req_selector, 1);
-	setenv("SCRIPT_FILENAME", file, 1);
+	setenv("SCRIPT_FILENAME", script, 1);
 	setenv("REMOTE_ADDR", st->req_remote_addr, 1);
 	setenv("HTTP_REFERER", st->req_referrer, 1);
-	setenv("HTTP_USER_AGENT", st->req_user_agent, 1);
 	setenv("HTTP_ACCEPT_CHARSET", st->out_charset, 1);
 
 	/* Gophernicus extras */
-	setenv("REQUEST_PROTOCOL", st->req_protocol, 1);
 	snprintf(buf, sizeof(buf), "%c", st->req_filetype);
 	setenv("GOPHER_FILETYPE", buf, 1);
 	setenv("GOPHER_CHARSET", st->out_charset, 1);
 	setenv("GOPHER_REFERER", st->req_referrer, 1);
-	setenv("GOPHER_USER_AGENT", st->req_user_agent, 1);
 	snprintf(buf, sizeof(buf), "%i", st->out_width);
 	setenv("COLUMNS", buf, 1);
 
@@ -243,15 +244,24 @@ void runcgi(state *st, char *file, char *arg)
 			st->req_selector, st->req_query_string);
 		setenv("SELECTOR", buf, 1);
 	}
-	else {
-		setenv("SELECTOR", st->req_selector, 1);
-	}
+	else setenv("SELECTOR", st->req_selector, 1);
+
 	setenv("SERVER_HOST", st->server_host, 1);
 	setenv("REQUEST", st->req_selector, 1);
 	setenv("SEARCHREQUEST", st->req_query_string, 1);
+}
 
-	/* Try to execute the binary */
-	execl(file, file, arg, NULL);
+
+/*
+ * Execute a CGI script
+ */
+void run_cgi(state *st, char *script, char *arg)
+{
+	/* Setup environment & execute the binary */
+	if (st->debug) syslog(LOG_INFO, "executing script \"%s\"", script);
+
+	setenv_cgi(st, script);
+	execl(script, script, arg, NULL);
 
 	/* Didn't work - die */
 	die(st, ERR_EXE);
@@ -272,24 +282,26 @@ void gopher_file(state *st)
 	else c = st->req_realpath;
 	if (strcmp(c, st->map_file) == MATCH) die(st, ERR_ACCESS);
 
-	/* Check for & run CGI scripts */
+	/* Check for & run CGI scripts and query scripts */
 	if (strstr(st->req_realpath, st->cgi_file) || st->req_filetype == TYPE_QUERY)
-		runcgi(st, st->req_realpath, NULL);
+		run_cgi(st, st->req_realpath, NULL);
 
 	/* Check for a file suffix filter */
 	if (*st->filter_dir && (c = strrchr(st->req_realpath, '.'))) {
 		snprintf(buf, sizeof(buf), "%s/%s", st->filter_dir, c + 1);
 
+		/* Filter file through the script */
 		if (stat(buf, &file) == OK && (file.st_mode & S_IXOTH))
-			runcgi(st, buf, st->req_realpath);
+			run_cgi(st, buf, st->req_realpath);
 	}
 
 	/* Check for a filetype filter */
 	if (*st->filter_dir) {
 		snprintf(buf, sizeof(buf), "%s/%c", st->filter_dir, st->req_filetype);
 
+		/* Filter file through the script */
 		if (stat(buf, &file) == OK && (file.st_mode & S_IXOTH))
-			runcgi(st, buf, st->req_realpath);
+			run_cgi(st, buf, st->req_realpath);
 	}
 
 	/* Output regular files */

@@ -79,7 +79,7 @@ int sortdir(char *path, sdirent *list, int max)
 	closedir(dp);
 
 	/* Sort the entries */
-	if (i > 0) qsort(list, i, sizeof(sdirent), foldersort);
+	if (i > 1) qsort(list, i, sizeof(sdirent), foldersort);
 
 	/* Return number of entries found */
 	return i;
@@ -207,7 +207,7 @@ char gopher_filetype(state *st, char *file)
 	if ((c = strrchr(file, '.'))) {
 		c++;
 
-		/* Loop through the filetype array */
+		/* Loop through the filetype array looking for a match*/
 		for (i = 0; i < st->filetype_count; i++)
 			if (strcasecmp(st->filetype[i].suffix, c) == MATCH)
 				return st->filetype[i].type;
@@ -230,9 +230,10 @@ char gopher_filetype(state *st, char *file)
 /*
  * Handle gophermaps
  */
-int gophermap(state *st, char *file)
+int gophermap(state *st, char *mapfile, int depth)
 {
 	FILE *fp;
+	struct stat file;
 	char line[BUFSIZE];
 	char *selector;
 	char *name;
@@ -240,10 +241,38 @@ int gophermap(state *st, char *file)
 	char *c;
 	char type;
 	int port;
+	int exe;
 
-	/* Try to open the file */
-	if (st->debug) syslog(LOG_INFO, "handling gophermap \"%s\"", file);
-	if ((fp = fopen(file , "r")) == NULL) return 0;
+	/* Prevent include loops */
+	if (depth > 4) return OK;
+
+	/* Try to figure out whether the map is executable */
+	if (stat(mapfile, &file) == OK) {
+		if ((file.st_mode & S_IXOTH)) exe = TRUE;
+		else exe = FALSE;
+	}
+
+	/* As a fallback let's just feed everything to shell.. */
+	else exe = TRUE;
+
+	/* Debug output */
+	if (st->debug) {
+		if (exe) syslog(LOG_INFO, "parsing executable gophermap \"%s\"", mapfile);
+		else syslog(LOG_INFO, "parsing static gophermap \"%s\"", mapfile);
+	}
+
+	/* Try to execute or open the mapfile */
+#ifdef HAVE_POPEN
+	if (exe) {
+		if (depth == 0) setenv_cgi(st, mapfile);
+		if ((fp = popen(mapfile , "r")) == NULL) return OK;
+	}
+	else {
+#else
+	{
+#endif
+		if ((fp = fopen(mapfile , "r")) == NULL) return OK;
+	}
 
 	/* Read lines one by one */
 	while (fgets(line, sizeof(line) - 1, fp)) {
@@ -257,8 +286,8 @@ int gophermap(state *st, char *file)
 		if (type == '#') continue;
 
 		/* Stop handling gophermap? */
-		if (type == '*') return 0;
-		if (type == '.') return 1;
+		if (type == '*') return OK;
+		if (type == '.') return QUIT;
 
 		/* Print a list of users with public_gopher */
 		if (type == '~') {
@@ -287,13 +316,17 @@ int gophermap(state *st, char *file)
 			continue;
 		}
 
-		/* gopher++ title */
-#ifdef ENABLE_GOPHERPLUSPLUS
+		/* Include gophermap or shell exec */
+		if (type == '=') {
+			gophermap(st, name, depth + 1);
+			continue;
+		}
+
+		/* Title resource */
 		if (type == TYPE_TITLE) {
 			info(st, name, TYPE_TITLE);
 			continue;
 		}
-#endif
 
 		/* Print out non-resources as info text */
 		if (!strchr(line, '\t')) {
@@ -323,8 +356,10 @@ int gophermap(state *st, char *file)
 			port = atoi(c + 1);
 		}
 
-		/* Handle absolute and hURL gopher resources */
-		if (selector[0] == '/' || strncmp(selector, "URL:", 4) == MATCH) {
+		/* Handle remote, absolute and hURL gopher resources */
+		if (sstrncmp(selector, "URL:") == MATCH ||
+		    selector[0] == '/' || host != st->server_host) {
+
 			printf("%c%s\t%s\t%s\t%i" CRLF, type, name,
 				selector, host, port);
 		}
@@ -338,7 +373,7 @@ int gophermap(state *st, char *file)
 
 	/* Clean up & return */
 	fclose(fp);
-	return 1;
+	return QUIT;
 }
 
 
@@ -368,19 +403,15 @@ void gopher_menu(state *st)
 	snprintf(pathname, sizeof(pathname), "%s/%s", st->req_realpath, st->map_file);
 	if (stat(pathname, &file) == OK) {
 
-		/* Executable map? */
-		if ((file.st_mode & S_IXOTH)) runcgi(st, pathname, NULL);
-
-		/* Handle non-exec maps */
-		if (gophermap(st, pathname)) {
+		/* Parse gophermap */
+		if (gophermap(st, pathname, 0) == QUIT) {
 			footer(st);
 			return;
 		}
 	}
 
 	/* No gophermap found - print header */
-#ifdef ENABLE_GOPHERPLUSPLUS
-	else {
+	else if (st->opt_header) {
 		/* Convert selector to output charset */
 		if (st->opt_iconv)
 			strniconv(st->out_charset, displayname, st->req_selector, sizeof(displayname));
@@ -400,7 +431,6 @@ void gopher_menu(state *st)
 		info(st, buf, TYPE_TITLE);
 		info(st, EMPTY, TYPE_INFO);
 	}
-#endif
 
 	/* Scan the directory */
 	num = sortdir(st->req_realpath, dir, MAX_SDIRENT);
@@ -454,7 +484,7 @@ void gopher_menu(state *st)
 
 		/* Handle inline .gophermap */
 		if (strstr(displayname, st->map_file) > displayname) {
-			gophermap(st, pathname);
+			gophermap(st, pathname, 0);
 			continue;
 		}
 
