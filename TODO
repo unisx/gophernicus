@@ -1,0 +1,13 @@
+Things I should work on:
+
+	* README needs work...
+	* Automated feature testing script (perl?)
+	* Script handlers: .php -> /usr/bin/php5-cgi
+
+
+Things I might work on:
+
+	* Logparser (real-time?)
+	* BUG: symlinks to directories aren't sorted with other
+	  directories but with files
+

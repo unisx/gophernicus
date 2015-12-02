@@ -1,2 +1,0 @@
-# gophernicus
-unofficial gophernicus repository
