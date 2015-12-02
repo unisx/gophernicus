@@ -1,0 +1,35 @@
+Gophernicus - Copyright (c) 2009-2010 Kim Holviala <kim@holviala.com>
+
+Gophernicus Server is a modern full-featured (and hopefully) secure
+gopher daemon for inetd. It is licensed under the BSD license.
+
+Command line options:
+    -h hostname   Change server hostname             [$HOSTNAME]
+    -p port       Change server port                 [70]
+    -r root       Change gopher root                 [/var/gopher]
+    -t type       Change default filetype            [0]
+    -w width      Change default page width          [70]
+    -g mapfile    Change gophermap file              [gophermap]
+    -c cgidir     Change CGI script directory        [/cgi-bin/]
+    -u userdir    Change users personal gopherspace  [public_gopher]
+    -o charset    Change default output charset      [US-ASCII]
+
+    -s seconds    Session timeout in seconds         [1800]
+    -i hits       Maximum hits until throttling      [4096]
+    -k kbytes     Maximum transfer until throttling  [4194304]
+
+    -f filterdir  Specify directory for output filters
+    -e ext=type   Map file extension to gopher filetype
+
+    -nv           Disable virtual hosting
+    -nl           Disable parent directory links
+    -nf           Disable menu footer
+    -nd           Disable date and filesize in menus
+    -nc           Disable file content detection
+    -no           Disable charset conversion for output
+    -ns           Disable logging to syslog
+
+    -d            Debug to syslog (not for production use)
+    -l            Display the BSD license
+    -?            Display this help
+

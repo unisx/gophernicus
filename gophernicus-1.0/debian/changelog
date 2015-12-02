@@ -1,0 +1,11 @@
+gophernicus (1.0) unstable; urgency=low
+
+  * Initial debianized release
+  * File logging by default, installs logrotate config
+  * Pre-configures php support but only suggests php5-cli
+  * Create a default gopher root
+  * Installs an @reboot cron entry to snoop system type
+    using a dmidecode script (which must be run as root)
+
+ -- Kim Holviala <kim@holviala.com>  Mon, 27 Sep 2010 08:11:12 +0300
+

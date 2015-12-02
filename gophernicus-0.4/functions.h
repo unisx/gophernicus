@@ -1,0 +1,32 @@
+/* Automatically generated function definitions */
+
+void dump_file(char *file, off_t size);
+void url_redirect(state *st, char *url);
+void server_status(state *st, shm_state *shm, int shmid);
+void runcgi(state *st, char *file);
+void gopher_file(state *st);
+inline int max(int a, int b);
+void footer(state *st);
+void die(state *st, char *message);
+void selector_to_path(state *st);
+char *get_peer_address(void);
+void init_state(state *st);
+int foldersort(const struct dirent **a, const struct dirent **b);
+void userlist(state *st);
+void vhostlist(state *st);
+char gopher_filetype(state *st, char *file);
+int gophermap(state *st, char *file);
+void gopher_menu(state *st);
+char *platform(void);
+float loadavg(void);
+int get_shm_session_id(state *st, shm_state *shm);
+void get_shm_session(state *st, shm_state *shm);
+void update_shm_session(state *st, shm_state *shm);
+char strlast(char *str);
+void chomp(char *str);
+void strntoascii(char *out, char *in, size_t outsize);
+void strnencode(char *out, const char *in, size_t outsize);
+void strndecode(char *out, char *in, size_t outsize);
+void strfsize(char *out, off_t size, size_t outsize);
+size_t strlcpy(char *dst, const char *src, size_t siz);
+size_t strlcat(char *dst, const char *src, size_t siz);

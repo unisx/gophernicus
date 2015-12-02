@@ -1,2 +1,2 @@
 # gophernicus
-unofficial gophernicus repository
+gophernicus all public release archive. [2015-12-02]

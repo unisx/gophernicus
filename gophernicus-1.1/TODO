@@ -1,0 +1,16 @@
+Things I should work on:
+
+	* properly document gophertags
+	* gophertags text should be run through strniconv()
+	* fix debian postinst/prerm/postrm (questionless upgrades)
+
+
+Things I might work on:
+
+	* Support for config files
+	* Password-protected resources
+	* Allow/Deny per IP/host
+	* Automated feature testing script (perl?)
+	* SSL/TLS
+	* Standalone pre-forked (threaded?) version
+

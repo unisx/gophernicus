@@ -1,0 +1,93 @@
+2010-04-05  Kim Holviala  <kim@holviala.com>
+
+	* Released version 0.5
+	* Code tested to work on 32-bit Linux/armv5tel
+	* Filetype 7 query errors are now handled properly
+	* HTTP-style query string overrides type 7 query
+	* Protocol detection (0/+/++) works properly
+	* gopher++ extra headers parsed correctly
+	* gopher++ works ok with a patched NSCA Mosaic!
+	* ISO-8859-1 (Latin-1) output
+	* Full UTF-8 output support (without widechars)
+	* Gophermaps are converted to output charset
+	* All type 0 output is converted to output charset
+	* All charset conversions can be disabled with option -no
+	* !Titles in gophermaps are converted to gopher++ menu titles
+	* Automatically generates gopher++ titles for menus
+	* Compile-time option to strictly adhere to RFC 1436
+	* Compile-time option to disable all gopher++ support
+
+
+2010-03-29  Kim Holviala  <kim@holviala.com>
+
+	* Released version 0.4
+	* Renamed the project to "Gophernicus Server"
+	* Major rewrite with much cleaner code
+	* Changed all strncpy's to the OpenBSD strlcpy
+	* Server can guess the request type (menu/text/binary)
+	* Errors are formatted for current filetype (menu/text)
+	* Errors for images (types g&I) are outputted as an image
+	* /~luser (/home/luser/public_gopher) must be owned by luser
+	* Configurable output width for menus
+	* Files are outputted using sendfile() if available
+	* Locale forced to POSIX for strftime()
+	* Filetype '-' in gophermaps hides files
+	* Gopher+ requests are now handled gracefully
+	* Relative selectors in gophemaps work
+	* Filesizes in menus are now human-readable (KB/MB/GB etc)
+	* Refuse to serve world-writeable content
+	* Support for Apache-style /server-status
+	* HTTP requests for /server-status work (munin monitoring ftw!)
+	* Session tracking using shared memory
+	* Referer support for CGIs
+	* Replaced iconv() with own charset conversion routine
+	* Automatic throttling for users who hit the server too much
+	* Replaced static compile-time uname with uname()
+	* Support for virtual hosting (with gopher0 no less!)
+
+
+2010-01-07  Kim Holviala  <kim@holviala.com>
+
+	* Released version 0.3
+        * Automatic detection of text vs. binary filetype for files
+	  which have no (known) suffix
+	* hURL redirect pages now respect -f (no footer) option
+	* IPv6 support for logging & CGI REMOTE_ADDR
+	* Inline gophermaps
+	* Removed support for relative resource names in gophermaps
+	* Support for virtual userdirs (~user -> /home/user/public_gopher)
+	* Automatic listing of userdirs in gophermap
+	* Redirect accidental http requests to gopher
+	* License included in the binary -> install no longer installs docs
+	* Changed command line options (I was running out of arg letters...)
+	* Debug to syslog with '-d' option
+
+
+2010-01-02  Kim Holviala  <kim@holviala.com>
+
+	* Released version 0.2
+	* Logging to syslog
+	* Support for gophermaps
+	* Support for executable gophermaps
+	* Support for CGI scripts
+	* Support for type 7 search queries
+	* Support for hURL redirect pages
+	* Support for non-ASCII resource/file names (tested with UTF-8)
+	* Support for both %hex and #octal request encodings
+	* Try to get server hostname from $HOSTNAME or gethostname()
+	* Basic support for different platforms via HAVE_XX defines
+
+
+2009-12-30  Kim Holviala  <kim@holviala.com>
+
+	* Released version 0.1
+	* Basic rfc1436 functionality works
+	* Fancy menus with file dates & sizes
+	* Options via command line (with sensible defaults)
+
+
+2009-12-28  Kim Holviala  <kim@holviala.com>
+
+	* Started coding kgopherd
+	* Trying to remember how "C" works...
+

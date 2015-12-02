@@ -1,0 +1,75 @@
+Gophernicus Server - Copyright (c) 2009-2010 Kim Holviala <kim@holviala.com>
+
+Gophernicus is a modern full-featured (and hopefully) secure gopher
+daemon for inetd. Gophernicus is licensed under the BSD license.
+
+Command line options:
+    -h hostname   Change server hostname     [$HOSTNAME]
+    -p port       Change server port         [70]
+    -r root       Change gopher root         [/var/gopher]
+    -t type       Change default filetype    [0]
+    -w width      Change default page width  [70]
+    -g mapfile    Change gophermap file      [gophermap]
+    -c cgifilter  Change CGI script filter   [/cgi-bin/]
+    -u userdir    Change users gopherspace   [public_gopher]
+
+    -T seconds    Session timeout in seconds         [1800]
+    -H hits       Maximum hits until throttling      [1024]
+    -K kbytes     Maximum transfer until throttling  [1048576]
+
+    -nv           Disable virtual hosting
+    -nl           Disable parent directory links
+    -nf           Disable menu footer
+    -nd           Disable date and filesize in menus
+    -nc           Disable file content detection
+    -ns           Disable logging to syslog
+
+    -i ipaddr     Fake remote peer IP address for logging
+    -d            Debug to syslog (not for production use)
+    -l            Display the BSD license
+    -?            Display this help
+
+*
+
+=== FEATURES ===
+
+Gophernicus Server includes the following features:
+
+    * Full support for rfc1436 Gopher protocol
+    * Detects Gopher filetypes by file suffix
+    * Detects binary vs. text type by file content
+    * IPv6 support
+    * Supports non-ASCII filenames in resources
+    * Can generate hURL web link redirect pages
+    * Handles ~user virtual userdirs (~/public_gopher)
+    * Offers automatic listing of all ~userdirs
+    * Gopher resource menus can display dates and filesizes
+    * Supports bucktooth-style gophermaps
+    * Inline gophermaps which display in between files
+    * Supports CGI-scripts and executable gophermaps
+    * Gopher type 7 search queries
+
+
+=== INSTALLING ===
+
+Gophernicus requires a "C" compiler but no extra libraries aside from
+standard LIBC ones. It has been tested on Linux with GCC but it
+should work with other Unix-like systems and compilers as well.
+
+To compile and install run:
+
+$ make
+$ sudo make install
+
+The add something like this to your /etc/inetd.conf and restart
+inetd (or kill -HUP or whatever):
+
+gopher  stream  tcp  nowait  nobody  /usr/sbin/tcpd  <EXEC>
+
+Replace <EXEC> with the path to your binary and the necessary
+arguments (-h is mandatory for a working Gophernicus install):
+
+/usr/sbin/in.gophernicus -h full.host.name -r /var/gopher
+
+
+
