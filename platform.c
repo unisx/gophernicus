@@ -27,36 +27,61 @@
 
 
 /*
- * Return OS name & platform
+ * Generate OS name, version & machine we're running on
  */
-char *platform()
+void platform(state *st)
 {
 #ifdef HAVE_UNAME
+#ifdef _AIX
+	FILE *fp;
+#endif
 	struct utsname name;
-	static char buf[BUFSIZE];
+	char release[16];
+	char machine[32];
 	char *c;
 
 	/* Fetch system name */
 	uname(&name);
 
-	/* We're only interested in marjor.minor */
-	if ((c = strchr(name.release, '.')) != NULL)
-		if ((c = strchr(c + 1, '.')) != NULL) *c = '\0';
+	/* AIX wants to do *everything* differently... */
+#ifdef _AIX
+	snprintf(release, sizeof(release), "%s.%s",
+		name.version, name.release);
 
-	/* We don't want -VERSION */
-	if ((c = strchr(name.release, '-')) != NULL) *c = '\0';
+	if ((fp = popen("/usr/bin/uname -M", "r")) != NULL) {
+		fgets(machine, sizeof(machine), fp);
+		pclose(fp);
+
+		chomp(machine);
+		if ((c = strchr(machine, ','))) sstrlcpy(machine, c + 1);
+	}
+	else sstrlcpy(machine, name.machine);
+
+	/* Normal unices do the right thing */
+#else
+	sstrlcpy(release, name.release);
+	sstrlcpy(machine, name.machine);
+
+	/* We're only interested in major.minor version */
+	if ((c = strchr(release, '.'))) if ((c = strchr(c + 1, '.'))) *c = '\0';
+	if ((c = strchr(release, '-'))) *c = '\0';
+#endif
 
 	/* Create a nicely formatted platform string */
-	snprintf(buf, sizeof(buf), "%s %s %s",
+	snprintf(st->server_platform, sizeof(st->server_platform), "%s %s %s",
 		name.sysname,
-		name.release,
-		name.machine);
+		release,
+		machine);
 
-	return buf;
+	/* Debug */
+	if (st->debug) {
+		syslog(LOG_INFO, "generated platform string \"%s\"",
+			st->server_platform);
+	}
 
 #else
 	/* Fallback reply */
-	return "Unknown computer-like system";
+	strlcpy(out, "Unknown computer-like system", outsize);
 #endif
 
 }
@@ -67,21 +92,30 @@ char *platform()
  */
 float loadavg(void)
 {
-#ifdef __linux
-	/* Linux version */
         FILE *fp;
         char buf[BUFSIZE];
 
-	/* Read one line from /proc/loadavg */
+	/* Linux version */
+#ifdef __linux
 	buf[0] = '\0';
         if ((fp = fopen("/proc/loadavg" , "r")) == NULL) return 0;
-	fgets(buf, sizeof(buf) - 1, fp);
+	fgets(buf, sizeof(buf), fp);
         fclose(fp);
 
-	/* Return CPU load */
 	return (float) atof(buf);
 
+	/* Generic slow version - parse the output of uptime */
 #else
+	char *c;
+
+	if ((fp = popen("/usr/bin/uptime", "r")) != NULL) {
+		fgets(buf, sizeof(buf), fp);
+		pclose(fp);
+
+		if ((c = strstr(buf, "average: ")))
+			return (float) atof(c + 10);
+	}
+
 	/* Fallback reply */
 	return 0;
 #endif

@@ -31,7 +31,7 @@
  */
 
 #define ENABLE_GOPHERPLUSPLUS	/* Include gopher++ support */
-//#define ENABLE_STRICT_RFC1436	/* Follow RFC1436 to the letter */
+#undef  ENABLE_STRICT_RFC1436	/* Follow RFC1436 to the letter */
 
 
 /*
@@ -46,19 +46,25 @@
 #define HAVE_LOCALES		/* setlocale() and friends */
 #define HAVE_SHMEM		/* Shared memory support */
 #define HAVE_UNAME		/* uname() */
+#define HAVE_DIRENT_D_TYPE	/* d_type in struct dirent */
 #undef  HAVE_STRLCPY		/* strlcpy() from OpenBSD */
 #undef  HAVE_SENDFILE		/* sendfile() in Linux & others */
+#undef  HAVE_BROKEN_SCANDIR	/* Broken scandir() definition */
 
 /* Linux */
 #ifdef __linux
 #undef PASSWD_MIN_UID
 #define PASSWD_MIN_UID 500
 #define HAVE_SENDFILE
-
 #include <features.h>
 #if ! __GLIBC_PREREQ(2,8)
-#define HAVE_BROKEN_SCANDIR	/* scandir() weirdness */
+#define HAVE_BROKEN_SCANDIR
 #endif
+#endif
+
+/* AIX */
+#ifdef _AIX
+#undef HAVE_DIRENT_D_TYPE
 #endif
 
 
@@ -140,7 +146,6 @@
 #define TYPE_INFO	'i'
 #define TYPE_IMAGE	'I'
 #define TYPE_TITLE	'!'
-#define TYPE_STAT	'S'
 
 /* Defaults for settings */
 #define DEFAULT_ROOT	"/var/gopher"
@@ -178,10 +183,6 @@
 #define ERR_NOSEL	"No selector!"
 #define ERR_EXE		"Couldn't execute file!"
 
-/* Buffers */
-#define BUFSIZE		1024	/* Default size for all strings */
-#define MAX_HIDDEN	32	/* Maximum number of hidden files */
-
 /* String formats */
 #define SERVER_SOFTWARE	"Gophernicus/" VERSION " Server (%s)"
 #define HEADER_FORMAT	"[%s]"
@@ -195,24 +196,6 @@
 #define USERDIR_FORMAT	"~%s", pwd->pw_name	/* See man 3 getpwent */
 #define VHOST_FORMAT	"gopher://%s/"
 
-
-/* File suffix to gopher filetype mappings */
-#define FILETYPES \
-	"0", ".txt.pl.py.sh.tcl.c.cpp.h.log.conf.php.php3.", \
-	"1", ".map.menu.", \
-	"5", ".gz.tgz.tar.zip.bz2.rar.", \
-	"7", ".q.qry.", \
-	"9", ".iso.so.o.xls.doc.ppt.xlsx.docx.pptx.ttf.bin.", \
-	"c", ".ics.ical.", \
-	"g", ".gif.", \
-	"h", ".html.htm.xhtml.css.swf.rdf.rss.xml.", \
-	"I", ".jpg.jpeg.png.bmp.svg.tif.tiff.ico.xbm.xpm.pcx.", \
-	"M", ".mbox.", \
-	"p", ".pdf.ps.", \
-	"s", ".mp3.wav.mid.wma.flac.ogg.aiff.aac.", \
-	"v", ".avi.mp4.mpg.mov.qt.asf.mpv.", \
-	NULL, NULL
-
 /* ISO-8859-1 to US-ASCII look-alike conversion table */
 #define ASCII \
 	"E?,f..++^%S<??Z?" \
@@ -224,7 +207,19 @@
 	"aaaaaaaceeeeiiii" \
 	"dnooooo/ouuuuyty"
 
-#define UNKNOWN		'?'
+#define UNKNOWN '?'
+
+/* Sizes & maximums */
+#define BUFSIZE		1024	/* Default size for string buffers */
+#define MAX_HIDDEN	32	/* Maximum number of hidden files */
+#define MAX_FILETYPES	128	/* Maximum number of suffix to filetype mappings */
+#define MAX_FILTERS	16	/* Maximum number of file filters */
+
+/* Struct for file suffix -> gopher filetype mapping */
+typedef struct {
+	char suffix[15];
+	char type;
+} ftype;
 
 /* Struct for keeping the current options & state */
 typedef struct {
@@ -236,8 +231,8 @@ typedef struct {
 	char req_query_string[BUFSIZE];
 	char req_referrer[BUFSIZE];
 	char req_remote_addr[64];
-	/* char req_remote_host[HOST_NAME_MAX]; */
-	char req_user_agent[128];
+	/* char req_remote_host[64]; */
+	char req_user_agent[64];
 	char req_filetype;
 	off_t req_filesize;
 
@@ -246,9 +241,10 @@ typedef struct {
 	char out_charset[16];
 
 	/* Settings */
-	char server_root[BUFSIZE];
-	char server_host_default[HOST_NAME_MAX];
-	char server_host[HOST_NAME_MAX];
+	char server_platform[64];
+	char server_root[256];
+	char server_host_default[64];
+	char server_host[64];
 	int  server_port;
 
 	char default_filetype;
@@ -256,8 +252,12 @@ typedef struct {
 	char cgi_file[64];
 	char user_dir[64];
 
-	char hidden[MAX_HIDDEN][NAME_MAX];
+	char hidden[MAX_HIDDEN][256];
 	int hidden_count;
+
+	ftype filetype[MAX_FILETYPES];
+	int filetype_count;
+	char filter_dir[64];
 
 	/* Session */
 	int session_timeout;
@@ -278,7 +278,7 @@ typedef struct {
 /* Shared memory for session & accounting data */
 #ifdef HAVE_SHMEM
 
-#define SHM_KEY		0xbeeb0004	/* Unique identifier + struct version */
+#define SHM_KEY		0xbeeb0005	/* Unique identifier + struct version */
 #define SHM_MODE	0600		/* Access mode for the shared memory */
 #define SHM_SESSIONS	256		/* Max amount of user sessions to track */
 
@@ -299,11 +299,31 @@ typedef struct {
 	time_t start_time;
 	long hits;
 	long kbytes;
+	char server_platform[64];
 	shm_session session[SHM_SESSIONS];
 } shm_state;
 
 #endif
 
+/* File suffix to gopher filetype mappings */
+#define FILETYPES \
+	"txt","0","pl","0","py","0","sh","0","tcl","0","c","0","cpp","0", "h","0","log","0", \
+	"conf","0","php","0","php3","0", \
+	"map","1","menu","1", \
+	"Z","5","gz","5","tgz","5","tar","5","zip","5","bz2","5","rar","5", \
+	"q","7","qry","7", \
+	"iso","9","so","9","o","9","rtf","9","xls","9","doc","9","ppt","9", \
+	"xlsx","9","docx","9","pptx","9","ttf","9","bin","9", \
+	"ics","c","ical","c", \
+	"gif","g", \
+	"html","h","htm","h","xhtml","h","css","h","swf","h","rdf","h","rss","h","xml","h", \
+	"jpg","I","jpeg","I","png","I","bmp","I","svg","I","tif","I","tiff","I", \
+	"ico","I","xbm","I","xpm","I","pcx","I", \
+	"mbox","M", \
+	"pdf","p","ps","p", \
+	"mp3","s","wav","s","mid","s","wma","s","flac","s","ogg","s","aiff","s","aac","s", \
+	"avi","v","mp4","v","mpg","v","mov","v","qt","v","asf","v","mpv","v", \
+	NULL, NULL
 
 /*
  * Useful macros
@@ -317,9 +337,7 @@ typedef struct {
  * Include generated headers
  */
 #include "functions.h"
-#include "readme.h"
-#include "license.h"
-#include "error_gif.h"
+#include "files.h"
 
 #endif
 

@@ -1,13 +1,14 @@
 NAME    = gophernicus
 PACKAGE = $(NAME)-server
 BINARY  = in.$(NAME)
-VERSION = 0.5
+VERSION = 0.6
 
 SOURCES = $(NAME).c file.c menu.c string.c platform.c session.c
-HEADERS = functions.h readme.h license.h error_gif.h
+HEADERS = functions.h files.h
 OBJECTS = $(SOURCES:.c=.o)
-DOCS    = LICENSE README TODO ChangeLog GOPHERMAP
+DOCS    = LICENSE README INSTALL TODO ChangeLog GOPHERMAP
 
+INSTALL = ./install-sh -o root -g 0
 DESTDIR = /usr
 SBINDIR = $(DESTDIR)/sbin
 DOCDIR  = $(DESTDIR)/share/doc/$(PACKAGE)
@@ -17,7 +18,7 @@ TGZ     = $(DIST).tar.gz
 RELDIR  = /var/gopher/gophernicus.org/software/gophernicus/server/
 
 CC      = gcc
-CFLAGS  = -O2 -Wall -DVERSION="\"$(VERSION)\"" -DBINARY="\"$(BINARY)\""
+CFLAGS  = -O2 -Wall -DVERSION="\"$(VERSION)\""
 LDFLAGS =
 
 
@@ -31,29 +32,39 @@ $(BINARY): $(OBJECTS)
 .c.o:
 	$(CC) -c $(CFLAGS) $< -o $@
 
+
 headers: $(HEADERS)
 
 functions.h:
-	echo "/* Automatically generated function definitions */" > functions.h
-	echo >> functions.h
-	grep -h "^[a-z]" *.c | grep -v "int main" | sed -e "s/ =.*$$//" -e "s/ *$$/;/" >> functions.h
+	echo "/* Automatically generated function definitions */" > $@
+	echo >> $@
+	grep -h "^[a-z]" *.c | grep -v "int main" | sed -e "s/ =.*$$//" -e "s/ *$$/;/" >> $@
 
-readme.h:
-	./t2h.sh README > readme.h
+bin2c: bin2c.c
+	$(CC) $< -o $@
 
-license.h:
-	./t2h.sh LICENSE > license.h
+files.h: bin2c
+	./bin2c README > $@
+	./bin2c LICENSE >> $@
+	./bin2c error.gif ERROR_GIF >> $@
 
-error_gif.h:
-	./bin2h.sh error.gif ERROR_GIF > error_gif.h
 
 clean:
-	rm -f $(BINARY) $(OBJECTS) $(TGZ)
+	rm -f $(BINARY) $(OBJECTS) $(TGZ) $(HEADERS) bin2c
 
-realclean: clean
-	rm -f $(HEADERS)
 
-dist: realclean $(HEADERS)
+install: $(BINARY)
+	mkdir -p $(SBINDIR) $(DOCDIR)
+	$(INSTALL) -s -m 755 $(BINARY) $(SBINDIR)
+	$(INSTALL) -m 644 $(DOCS) $(DOCDIR)
+
+uninstall:
+	rm -f $(SBINDIR)/$(BINARY)
+	(cd $(DOCDIR) && rm -f $(DOCS))
+	-rmdir -p $(SBINDIR) $(DOCDIR) 2>/dev/null
+
+
+dist: clean functions.h
 	mkdir -p /tmp/$(DIST)
 	tar -cf - ./ | (cd /tmp/$(DIST) && tar -xf -)
 	(cd /tmp/ && tar -cvf - $(DIST)) | gzip > $(TGZ)
@@ -62,16 +73,6 @@ dist: realclean $(HEADERS)
 release: dist
 	cp $(TGZ) $(RELDIR)
 
-install: $(BINARY)
-	strip $(BINARY)
-	mkdir -p $(SBINDIR) $(DOCDIR)
-	install -m 755 $(BINARY) $(SBINDIR)
-	install -m 644 $(DOCS) $(DOCDIR)
-
-uninstall:
-	rm -f $(SBINDIR)/$(BINARY)
-	(cd $(DOCDIR) && rm -f $(DOCS))
-	-rmdir -p $(SBINDIR) $(DOCDIR) 2>/dev/null
 
 defines:
 	$(CC) -dM -E $(NAME).c

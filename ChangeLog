@@ -1,3 +1,20 @@
+2010-04-xx  Kim Holviala  <kim@holviala.com>
+
+	* platform() results are kept in shared memory
+	* Support for AIX 5.1 and newer
+	* IPv4-in-IPv6 prefix ::ffff: is removed from remote_addr
+	* Replaced install(1) with the install-sh script
+	* /server-status CPULoad can be parsed from /usr/bin/uptime
+	* Replaced text2c/hexdump with bin2c.c (less dependencies)
+	* Files with extension .q (type 7 query) are considered CGIs
+	* Filetype handling completely rewritten
+	* Configurable gopher filetypes using the "-e ext=X" argument
+	* Per-directory filetype overrides in gophermaps with ":ext=X"
+	* Refuse to serve out gophermaps (why didn't I catch this before?)
+	* Cleaned up main()
+	* Output filters - run files through an external program (php!)
+
+
 2010-04-05  Kim Holviala  <kim@holviala.com>
 
 	* Released version 0.5

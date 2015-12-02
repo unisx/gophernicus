@@ -29,6 +29,7 @@
 /*
  * Callback for sorting directories folders first
  */
+#ifdef HAVE_DIRENT_D_TYPE
 int foldersort(const struct dirent **a, const struct dirent **b)
 {
 	/* Sort directories first */
@@ -38,6 +39,7 @@ int foldersort(const struct dirent **a, const struct dirent **b)
 	/* Alphabetic sort for the rest */
 	return strcmp((*a)->d_name, (*b)->d_name);
 }
+#endif
 
 
 /*
@@ -160,9 +162,7 @@ void vhostlist(state *st)
 char gopher_filetype(state *st, char *file)
 {
 	FILE *fp;
-	static const char *filetypes[] = { FILETYPES };
-	char suffix[20];
-	char line[BUFSIZE];
+	char buf[BUFSIZE];
 	char *c;
 	int i;
 
@@ -172,13 +172,12 @@ char gopher_filetype(state *st, char *file)
 
 	/* Get file suffix */
 	if ((c = strrchr(file, '.'))) {
+		c++;
 
-		/* Add a dot to suffix for easier searching (.txt -> .txt.) */
-		snprintf(suffix, sizeof(suffix), "%s.", c);
-
-		/* Loop through the filetype array looking for the suffix */
-		for (i = 0; filetypes[i]; i += 2)
-			if (strstr(filetypes[i + 1], suffix)) return *filetypes[i];
+		/* Loop through the filetype array */
+		for (i = 0; i < st->filetype_count; i++)
+			if (strcasecmp(st->filetype[i].suffix, c) == MATCH)
+				return st->filetype[i].type;
 	}
 
 	/* Are we allowed to look inside files? */
@@ -186,11 +185,11 @@ char gopher_filetype(state *st, char *file)
 
 	/* Read data from the file */
 	if ((fp = fopen(file , "r")) == NULL) return st->default_filetype;
-	i = fread(line, 1, sizeof(line), fp);
+	i = fread(buf, 1, sizeof(buf), fp);
 	fclose(fp);
 
 	/* Binary or text? */
-	if (memchr(line, '\0', i)) return TYPE_BINARY;
+	if (memchr(buf, '\0', i)) return TYPE_BINARY;
 	return st->default_filetype;
 }
 
@@ -246,6 +245,12 @@ int gophermap(state *st, char *file)
 		if (type == '-') {
 			if (st->hidden_count < MAX_HIDDEN)
 				sstrlcpy(st->hidden[st->hidden_count++], name);
+			continue;
+		}
+
+		/* Override filetype mappings */
+		if (type == ':') {
+			add_ftype_mapping(st, name);
 			continue;
 		}
 
@@ -330,7 +335,7 @@ void gopher_menu(state *st)
 	if (stat(pathname, &file) == OK) {
 
 		/* Executable map? */
-		if ((file.st_mode & S_IXOTH)) runcgi(st, pathname);
+		if ((file.st_mode & S_IXOTH)) runcgi(st, pathname, NULL);
 
 		/* Handle non-exec maps */
 		if (gophermap(st, pathname)) {
@@ -366,8 +371,10 @@ void gopher_menu(state *st)
 	/* Scan the directory */
 #ifdef HAVE_BROKEN_SCANDIR
 	num = scandir(st->req_realpath, &dir, NULL, (int (*)(const void *, const void *)) foldersort);
-#else
+#elif HAVE_DIRENT_D_TYPE
 	num = scandir(st->req_realpath, &dir, NULL, foldersort);
+#else
+	num = scandir(st->req_realpath, &dir, NULL, alphasort);
 #endif
 	if (num < 0) die(st, ERR_NOTFOUND);
 

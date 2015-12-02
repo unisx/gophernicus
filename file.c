@@ -166,7 +166,7 @@ void server_status(state *st, shm_state *shm, int shmid)
 			shm->kbytes * 1024 / (shm->hits + 1),
 			(int) shm_ds.shm_nattch,
 			loadavg());
-	printf("Server: " SERVER_SOFTWARE CRLF, platform());
+	printf("Server: " SERVER_SOFTWARE CRLF, st->server_platform);
 
 	/* Print active sessions */
 	sessions = 0;
@@ -195,7 +195,7 @@ void server_status(state *st, shm_state *shm, int shmid)
 /*
  * Execute a CGI script
  */
-void runcgi(state *st, char *file)
+void runcgi(state *st, char *file, char *arg)
 {
 	char buf[BUFSIZE];
 
@@ -208,7 +208,7 @@ void runcgi(state *st, char *file)
 	setenv("GATEWAY_INTERFACE", "CGI/1.1", 1);
 	setenv("CONTENT_LENGTH", "0", 1);
 	setenv("QUERY_STRING", st->req_query_string, 1);
-	snprintf(buf, sizeof(buf), SERVER_SOFTWARE, platform());
+	snprintf(buf, sizeof(buf), SERVER_SOFTWARE, st->server_platform);
 	setenv("SERVER_SOFTWARE", buf, 1);
 #ifdef ENABLE_GOPHERPLUSPLUS
 	setenv("SERVER_PROTOCOL", PROTO_GOPHERPLUSPLUS, 1);
@@ -251,7 +251,7 @@ void runcgi(state *st, char *file)
 	setenv("SEARCHREQUEST", st->req_query_string, 1);
 
 	/* Try to execute the binary */
-	execl(file, file, (char *) NULL);
+	execl(file, file, arg, NULL);
 
 	/* Didn't work - die */
 	die(st, ERR_EXE);
@@ -263,12 +263,38 @@ void runcgi(state *st, char *file)
  */
 void gopher_file(state *st)
 {
+	struct stat file;
+	char buf[BUFSIZE];
+	char *c;
+
+	/* Refuse to serve out gophermaps */
+	if ((c = strrchr(st->req_realpath, '/'))) c++;
+	else c = st->req_realpath;
+	if (strcmp(c, st->map_file) == MATCH) die(st, ERR_ACCESS);
+
 	/* Check for & run CGI scripts */
-	if (strstr(st->req_realpath, st->cgi_file))
-		runcgi(st, st->req_realpath);
+	if (strstr(st->req_realpath, st->cgi_file) || st->req_filetype == TYPE_QUERY)
+		runcgi(st, st->req_realpath, NULL);
+
+	/* Check for a file suffix filter */
+	if (*st->filter_dir && (c = strrchr(st->req_realpath, '.'))) {
+		snprintf(buf, sizeof(buf), "%s/%s", st->filter_dir, c + 1);
+
+		if (stat(buf, &file) == OK && (file.st_mode & S_IXOTH))
+			runcgi(st, buf, st->req_realpath);
+	}
+
+	/* Check for a filetype filter */
+	if (*st->filter_dir) {
+		snprintf(buf, sizeof(buf), "%s/%c", st->filter_dir, st->req_filetype);
+
+		if (stat(buf, &file) == OK && (file.st_mode & S_IXOTH))
+			runcgi(st, buf, st->req_realpath);
+	}
 
 	/* Output regular files */
 	if (st->req_filetype == TYPE_TEXT) send_text_file(st);
 	else send_binary_file(st);
 }
+
 

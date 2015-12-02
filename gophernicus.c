@@ -79,7 +79,7 @@ void footer(state *st)
 	/* Menu footer? */
 	if (st->req_filetype == TYPE_MENU || st->req_filetype == TYPE_QUERY) {
 		info(st, buf, TYPE_INFO);
-		snprintf(buf, sizeof(buf), FOOTER_FORMAT, platform());
+		snprintf(buf, sizeof(buf), FOOTER_FORMAT, st->server_platform);
 		info(st, buf, TYPE_INFO);
 		printf("." CRLF);
 	}
@@ -87,7 +87,7 @@ void footer(state *st)
 	/* Plain text footer */
 	else {
 		printf("%s" CRLF, buf);
-		printf(FOOTER_FORMAT CRLF, platform());
+		printf(FOOTER_FORMAT CRLF, st->server_platform);
 	}
 }
 
@@ -97,7 +97,7 @@ void footer(state *st)
  */
 void die(state *st, char *message)
 {
-	static unsigned char error_gif[] = ERROR_GIF;
+	static const char error_gif[] = ERROR_GIF;
 
 	/* Log the error */
 	if (st->opt_syslog) {
@@ -241,8 +241,12 @@ char *get_peer_address(void)
 	/* IPv4 didn't work - try IPv6 */
 #ifdef HAVE_IPv6
 	if (getpeername(0, (struct sockaddr *) &addr6, &addr6size) == OK) {
-		if (inet_ntop(AF_INET6, &addr6.sin6_addr, address, sizeof(address)) != NULL)
-			return address;
+		if (inet_ntop(AF_INET6, &addr6.sin6_addr, address, sizeof(address)) != NULL) {
+
+			/* Strip ::ffff: IPv4-in-IPv6 prefix */
+			if (strncmp(address, "::ffff:", 7) == MATCH) return (address + 7);
+			else return address;
+		}
 	}
 #endif
 
@@ -307,6 +311,9 @@ void get_plusplus_headers(state *st)
  */
 void init_state(state *st)
 {
+	static const char *filetypes[] = { FILETYPES };
+	int i;
+
         /* Request */
 	sstrlcpy(st->req_protocol, PROTO_GOPHER0);
 	strclear(st->req_selector);
@@ -324,6 +331,7 @@ void init_state(state *st)
         sstrlcpy(st->out_charset, DEFAULT_CHARSET);
 
         /* Settings */
+	strclear(st->server_platform);
         sstrlcpy(st->server_root, DEFAULT_ROOT);
         sstrlcpy(st->server_host_default, DEFAULT_HOST);
         sstrlcpy(st->server_host, DEFAULT_HOST);
@@ -335,6 +343,8 @@ void init_state(state *st)
         sstrlcpy(st->user_dir, DEFAULT_USERDIR);
 
 	st->hidden_count = 0;
+	st->filetype_count = 0;
+	strclear(st->filter_dir);
 
 	/* Session */
         st->session_timeout = DEFAULT_SESSION_TIMEOUT;
@@ -350,6 +360,115 @@ void init_state(state *st)
         st->opt_magic = TRUE;
         st->opt_iconv = TRUE;
         st->debug = FALSE;
+
+	/* Load default suffix -> filetype mappings */
+	for (i = 0; filetypes[i]; i += 2) {
+		if (st->filetype_count < MAX_FILETYPES) {
+			sstrlcpy(st->filetype[st->filetype_count].suffix, filetypes[i]);
+			st->filetype[st->filetype_count].type = *filetypes[i + 1];
+			st->filetype_count++;
+		}
+	}
+}
+
+
+/*
+ * Add one suffix->filetype mapping to the filetypes array
+ */
+void add_ftype_mapping(state *st, char *suffix)
+{
+	char *type;
+	int i;
+
+	/* Let's not do anything stupid */
+	if (!*suffix) return;
+	if (!(type = strchr(suffix, '='))) return;
+
+	/* Extract type from the suffix:X string */
+	*type++ = '\0';
+	if (!*type) return;
+
+	/* Loop through the filetype array */
+	for (i = 0; i < st->filetype_count; i++) {
+
+		/* Old entry found? */
+		if (strcasecmp(st->filetype[i].suffix, suffix) == MATCH) {
+			st->filetype[i].type = *type;
+			return;
+		}
+	}
+
+	/* No old entry found - add new entry */
+	if (i < MAX_FILETYPES) {
+		sstrlcpy(st->filetype[i].suffix, suffix);
+		st->filetype[i].type = *type;
+		st->filetype_count++;
+	}
+}
+
+
+/*
+ * Parse command-line arguments
+ */
+void parse_args(state *st, int argc, char *argv[])
+{
+	static const char readme[] = README;
+	static const char license[] = LICENSE;
+	struct stat file;
+	char buf[BUFSIZE];
+	int opt;
+
+	/* Parse args */
+	while ((opt = getopt(argc, argv, "h:p:r:t:w:g:c:u:o:s:i:k:f:e:n:dl?-")) != ERROR) {
+		switch(opt) {
+			case 'h': sstrlcpy(st->server_host, optarg); break;
+			case 'p': st->server_port = atoi(optarg); break;
+			case 'r': sstrlcpy(st->server_root, optarg); break;
+			case 't': st->default_filetype = *optarg; break;
+			case 'w': st->out_width = atoi(optarg); break;
+			case 'g': sstrlcpy(st->map_file, optarg); break;
+			case 'c': sstrlcpy(st->cgi_file, optarg); break;
+			case 'u': sstrlcpy(st->user_dir, optarg);  break;
+			case 'o': sstrlcpy(st->out_charset, optarg);  break;
+
+			case 's': st->session_timeout = atoi(optarg); break;
+			case 'i': st->session_max_kbytes = abs(atoi(optarg)); break;
+			case 'k': st->session_max_hits = abs(atoi(optarg)); break;
+
+			case 'f': sstrlcpy(st->filter_dir, optarg); break;
+			case 'e': add_ftype_mapping(st, optarg); break;
+
+			case 'n':
+				if (*optarg == 'v') { st->opt_vhost = FALSE; break; }
+				if (*optarg == 'l') { st->opt_parent = FALSE; break; }
+				if (*optarg == 'f') { st->opt_footer = FALSE; break; }
+				if (*optarg == 'd') { st->opt_date = FALSE; break; }
+				if (*optarg == 'c') { st->opt_magic = FALSE; break; }
+				if (*optarg == 'o') { st->opt_iconv = FALSE; break; }
+				if (*optarg == 's') { st->opt_syslog = FALSE; break; }
+				break;
+
+			case 'd': st->debug = TRUE; break;
+			case 'l': printf(license); exit(OK);
+			default : printf(readme); exit(OK);
+		}
+	}
+
+	/* Sanitize options */
+	if (st->out_width > MAX_WIDTH) st->out_width = MAX_WIDTH;
+	if (st->out_width < MIN_WIDTH) st->out_width = MIN_WIDTH;
+	if (st->out_width  < MIN_WIDTH + DATE_WIDTH) st->opt_date = FALSE;
+	if (!st->opt_syslog) st->debug = FALSE;
+
+	/* Primary vhost directory must exist or we disable vhosting */
+	if (st->opt_vhost) {
+		snprintf(buf, sizeof(buf), "%s/%s", st->server_root, st->server_host);
+                if (stat(buf, &file) == ERROR) {
+			st->opt_vhost = FALSE;
+			if (st->debug)
+				syslog(LOG_INFO, "disabling vhosting: %s must exist", buf);
+		}
+	}
 }
 
 
@@ -360,6 +479,7 @@ int main(int argc, char *argv[])
 {
 	struct stat file;
 	state st;
+	char self[64];
 	char buf[BUFSIZE];
 	char *dest;
 	char *c;
@@ -370,6 +490,10 @@ int main(int argc, char *argv[])
 	shm_state *shm;
 	int shmid;
 #endif
+
+	/* Get the name of this binary */
+	if ((c = strrchr(argv[0], '/'))) sstrlcpy(self, c + 1);
+	else sstrlcpy(self, argv[0]);
 
 	/* Initialize state */
 #ifdef HAVE_LOCALES
@@ -391,9 +515,21 @@ int main(int argc, char *argv[])
 			shm = NULL;
 
 		/* Initialize mapped shared memory */
-		if (shm && shm->start_time == 0) shm->start_time = time(NULL);
+		if (shm && shm->start_time == 0) {
+			shm->start_time = time(NULL);
+
+			/* Keep platform in shm */
+			platform(&st);
+			sstrlcpy(shm->server_platform, st.server_platform);
+		}
 	}
+
+	/* Get server platform (uname) */
+	if (shm)
+		sstrlcpy(st.server_platform, shm->server_platform);
+	else
 #endif
+		platform(&st);
 
 	/* Refuse to run as root */
 	if (getuid() == 0) die(&st, ERR_ROOT);
@@ -406,56 +542,10 @@ int main(int argc, char *argv[])
 	sstrlcpy(st.req_remote_addr, get_peer_address());
 
 	/* Handle command line arguments */
-	while ((i = getopt(argc, argv, "h:p:r:t:w:g:c:u:o:s:i:k:n:dl?-")) != ERROR) {
-		switch(i) {
-			case 'h': sstrlcpy(st.server_host, optarg); break;
-			case 'p': st.server_port = atoi(optarg); break;
-			case 'r': sstrlcpy(st.server_root, optarg); break;
-			case 't': st.default_filetype = *optarg; break;
-			case 'w': st.out_width = atoi(optarg); break;
-			case 'g': sstrlcpy(st.map_file, optarg); break;
-			case 'c': sstrlcpy(st.cgi_file, optarg); break;
-			case 'u': sstrlcpy(st.user_dir, optarg);  break;
-			case 'o': sstrlcpy(st.out_charset, optarg);  break;
-
-			case 's': st.session_timeout = atoi(optarg); break;
-			case 'i': st.session_max_kbytes = abs(atoi(optarg)); break;
-			case 'k': st.session_max_hits = abs(atoi(optarg)); break;
-
-			case 'n':
-				if (*optarg == 'v') { st.opt_vhost = FALSE; break; }
-				if (*optarg == 'l') { st.opt_parent = FALSE; break; }
-				if (*optarg == 'f') { st.opt_footer = FALSE; break; }
-				if (*optarg == 'd') { st.opt_date = FALSE; break; }
-				if (*optarg == 'c') { st.opt_magic = FALSE; break; }
-				if (*optarg == 'o') { st.opt_iconv = FALSE; break; }
-				if (*optarg == 's') { st.opt_syslog = FALSE; break; }
-				break;
-
-			case 'd': st.debug = TRUE; break;
-			case 'l': printf(LICENSE);; return OK;
-			default : printf(README); return OK;
-		}
-	}
-
-	/* Sanitize options */
-	if (st.out_width > MAX_WIDTH) st.out_width = MAX_WIDTH;
-	if (st.out_width < MIN_WIDTH) st.out_width = MIN_WIDTH;
-	if (st.out_width  < MIN_WIDTH + DATE_WIDTH) st.opt_date = FALSE;
-	if (!st.opt_syslog) st.debug = FALSE;
-
-	/* Primary vhost directory must exist or we disable vhosting */
-	if (st.opt_vhost) {
-		snprintf(buf, sizeof(buf), "%s/%s", st.server_root, st.server_host);
-                if (stat(buf, &file) == ERROR) {
-			st.opt_vhost = FALSE;
-			if (st.debug)
-				syslog(LOG_INFO, "disabling vhosting: %s must exist", buf);
-		}
-	}
+	parse_args(&st, argc, argv);
 
 	/* Open syslog() */
-	if (st.opt_syslog) openlog(BINARY, LOG_PID, LOG_DAEMON);
+	if (st.opt_syslog) openlog(self, LOG_PID, LOG_DAEMON);
 
 	/* Read selector, remove CRLF & encodings */
 	buf[0] = '/';
@@ -483,7 +573,7 @@ int main(int argc, char *argv[])
 	if (strncmp(buf + 1, "GET " SERVER_STATUS, sizeof("GET " SERVER_STATUS) - 1) == MATCH) {
 		printf("HTTP/1.0 200 OK" CRLF);
 		printf("Content-Type: text/plain" CRLF);
-		printf("Server: " SERVER_SOFTWARE CRLF CRLF, platform());
+		printf("Server: " SERVER_SOFTWARE CRLF CRLF, st.server_platform);
 
 		if (shm) server_status(&st, shm, shmid);
 		return OK;
@@ -496,7 +586,7 @@ int main(int argc, char *argv[])
 
 		printf("HTTP/1.0 301 Moved Permanently" CRLF);
 		printf("Location: gopher://%s:%i/" CRLF, st.server_host, st.server_port);
-		printf("Server: " SERVER_SOFTWARE CRLF CRLF, platform());
+		printf("Server: " SERVER_SOFTWARE CRLF CRLF, st.server_platform);
 		return OK;
 	}
 
